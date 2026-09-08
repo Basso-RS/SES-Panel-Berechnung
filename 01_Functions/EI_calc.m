@@ -1,5 +1,9 @@
 function Results = EI_calc (Mdata,Results,Scenario)
 
+% E-Modul und UTS zur Auswertung direkt in Results ablegen
+Results.E   = (Mdata.cfk.E_top + Mdata.cfk.E_lower) / 2;
+Results.UTS = Mdata.cfk.UTS;
+
 % Abstand der Schwerpunkte der Deckhäute vom Gesamt-Schwerpunkt (bei symmetrischem Aufbau)
 z_top = Mdata.core.t/2 + Mdata.cfk.t_top/2;
 z_lower = Mdata.core.t/2 + Mdata.cfk.t_lower/2;

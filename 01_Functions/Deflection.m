@@ -1,69 +1,69 @@
-function Results = Deflection (Results,Scenario,Mdata)
+function [Results, Curve] = Deflection (Results,Scenario,Mdata)
 %% Gradient & max Force at 12.7 mm
 
-    % Das SES ignoriert für den Gradienten und die E-Modul-Rückrechnung den Kernschub.
-    % Um das SES perfekt für die Vorauslegung zu spiegeln, nutzen wir nur den Biegeterm:
-    nenner = Scenario.panel.l^3 / (48 * Results.EI); 
-    
-    % Gradient (Steifigkeit) wie im SES [N/mm]
-    Results.Gradient = 1 / nenner;
+    % Gradient nach offizieller SES Euler-Bernoulli Biegeformel [N/mm]
+    grad_scale = 1.0;
+    if isfield(Mdata, 'gradient_factor') && ~isempty(Mdata.gradient_factor)
+        grad_scale = Mdata.gradient_factor;
+    end
+    Results.Gradient = ((48 * Results.EI) / (Scenario.panel.l^3)) * grad_scale;
 
-%% Force over Displacement (Weggesteuert inkl. Versagen)
-
-    % Arrays initialise
-    n_steps = 200;
-    % Wir geben den Weg (w) von 0 bis 12.7 mm vor
-    Results.w = linspace(0, Scenario.panel.w, n_steps);
-    Results.F = zeros(1, n_steps);
-    
-    panel_broken = false;
-    F_bruch = 0; 
-    
-    % Maximaler Hebelarm für Deckhautspannung (von neutraler Faser bis Außenkante)
-    % (Annahme symmetrisch)
+%% Analytische Bestimmung der Bruchlast (F_max) und des Bruchwegs (w_max)
     y_max = Mdata.core.t/2 + Mdata.cfk.t_top; 
     
-    % calc deflection
-    for idx = 1:n_steps
-        current_w = Results.w(idx);
+    % 1. Maximale Kraft begrenzt durch Deckhautbruch (UTS / Wrinkling)
+    if isfield(Mdata.cfk, 'UTS') && ~isnan(Mdata.cfk.UTS) && Mdata.cfk.UTS > 0
+        F_skin_fail = (Mdata.cfk.UTS * 4 * Results.I) / (Scenario.panel.l * y_max);
+    else
+        F_skin_fail = inf;
+    end
+    
+    % Reale Bruchlast (Deckhautversagen)
+    F_max = F_skin_fail;
+    
+    % Linear-elastischer Biegeweg
+    w_lin = F_max / Results.Gradient;
+    
+    % Reale Durchbiegung am Peak unter Berücksichtigung von Kernplastizität & Rolleneindrückung
+    softening = 0.52;
+    if isfield(Mdata, 'softening_factor') && ~isempty(Mdata.softening_factor)
+        softening = Mdata.softening_factor;
+    end
+    
+    delta_indent = 1.0;
+    if isfield(Mdata, 'indentation_depth') && ~isempty(Mdata.indentation_depth)
+        delta_indent = Mdata.indentation_depth;
+    end
+    
+    w_max = (w_lin / softening) + delta_indent + Scenario.panel.slack;
+
+%% Curve Struct (vektorisiert erzeugt, ohne for-Schleife)
+    if nargout > 1
+        Curve = struct();
+        n_steps = 200;
+        w_limit = max(Scenario.panel.w, w_max);
+        Curve.w = linspace(0, w_limit, n_steps);
+        Curve.F = zeros(1, n_steps);
         
-        % Effektiver Weg im Panel (Setzung / Slack des Testaufbaus abziehen)
-        if current_w <= Scenario.panel.slack
-            effective_w = 0;
-        else
-            effective_w = current_w - Scenario.panel.slack;
-        end
+        eff_w = max(0, Curve.w - Scenario.panel.slack);
+        w_eff_max = max(1e-6, w_max - Scenario.panel.slack);
+        idx_pre = (Curve.w <= w_max);
         
-        if ~panel_broken
-            % Lineare Kraft anhand des theoretischen Gradienten
-            current_F = effective_w * Results.Gradient;
-            
-            % 1. Deckhaut-Spannung berechnen (Biegemoment M = F * L / 4)
-            M = (current_F * Scenario.panel.l) / 4;
-            sigma_skin = (M * y_max) / Results.I;
-            
-            % 2. Kern-Schubspannung berechnen (Querkraft V = F / 2)
-            tau_core = (current_F / 2) / (Scenario.panel.b * Mdata.core.t); 
-            
-            % Versagenskriterium prüfen
-            if sigma_skin >= Mdata.cfk.UTS || tau_core >= Mdata.core.tau_max
-                panel_broken = true;
-                F_bruch = current_F;
-                % Kraft bricht schlagartig auf Rest-Niveau ein
-                Results.F(idx) = F_bruch * Mdata.post_fail_factor;
-            else
-                Results.F(idx) = current_F;
-            end
-        else
-            % Panel ist bereits gebrochen, Kraft bleibt auf Restniveau
-            Results.F(idx) = F_bruch * Mdata.post_fail_factor;
-        end
+        % Nicht-lineare Softening-Kurve bis zum Bruch bei w_max
+        % (Tangente bei w=0 entspricht dem SES-Biegegradienten, Tangente bei w_max geht horizontal über)
+        beta = max(1.0, (Results.Gradient * w_eff_max / F_max) - 1);
+        xi = min(1.0, eff_w(idx_pre) / w_eff_max);
+        Curve.F(idx_pre)  = F_max * (1 - (1 - xi).^beta);
+        
+        % Nachbruch-Restkraftplateau
+        Curve.F(~idx_pre) = F_max * Mdata.post_fail_factor;
+        
+        Curve.F_max = F_max;
+        Curve.w_max = w_max;
     end
 
-    % Die tatsächliche Maximalkraft (Bruchlast) im Versuch
-    [Results.F_max, max_idx] = max(Results.F);
-    
-    % Der Weg, bei dem die Maximalkraft erreicht wird (Bruchweg)
-    Results.w_max = Results.w(max_idx);
+    % Zwischengrößen EI und S aus Results entfernen
+    if isfield(Results, 'EI'), Results = rmfield(Results, 'EI'); end
+    if isfield(Results, 'S'),  Results = rmfield(Results, 'S');  end
 
 end 
