@@ -78,22 +78,30 @@ function cfk_props = calc_cfk_properties(layup_str, materials_csv_path, calc_ene
         end
         
         % Aliase für benutzerfreundliche Bezeichnungen
-        if isfield(cached_mat_dict, 'ud')
-            cached_mat_dict.m = cached_mat_dict.ud;
+        % M40J UD (m)
+        if isfield(cached_mat_dict, 'm')
+            cached_mat_dict.ud     = cached_mat_dict.m;
+            cached_mat_dict.m40jud = cached_mat_dict.m;
+        elseif isfield(cached_mat_dict, 'ud')
+            cached_mat_dict.m      = cached_mat_dict.ud;
             cached_mat_dict.m40jud = cached_mat_dict.ud;
         end
-        if isfield(cached_mat_dict, 'f')
-            cached_mat_dict.fm40j = cached_mat_dict.f;
-            cached_mat_dict.m40jf = cached_mat_dict.f;
-            cached_mat_dict.m40j  = cached_mat_dict.f;
+        % T700 Fabric (t7)
+        if isfield(cached_mat_dict, 't7')
+            cached_mat_dict.t     = cached_mat_dict.t7;
+            cached_mat_dict.t700  = cached_mat_dict.t7;
+            cached_mat_dict.ft700 = cached_mat_dict.t7;
+            cached_mat_dict.t700f = cached_mat_dict.t7;
+            cached_mat_dict.ft    = cached_mat_dict.t7;
+            cached_mat_dict.tf    = cached_mat_dict.t7;
         end
-        if isfield(cached_mat_dict, 't')
-            cached_mat_dict.t700  = cached_mat_dict.t;
-            cached_mat_dict.ft700 = cached_mat_dict.t;
-            cached_mat_dict.t700f = cached_mat_dict.t;
-            cached_mat_dict.t7    = cached_mat_dict.t;
-            cached_mat_dict.ft    = cached_mat_dict.t;
-            cached_mat_dict.tf    = cached_mat_dict.t;
+        % M40J Fabric (f)
+        if isfield(cached_mat_dict, 'f')
+            cached_mat_dict.fm40j      = cached_mat_dict.f;
+            cached_mat_dict.m40jf      = cached_mat_dict.f;
+            cached_mat_dict.mf         = cached_mat_dict.f;
+            cached_mat_dict.m40jfabric = cached_mat_dict.f;
+            cached_mat_dict.m40j       = cached_mat_dict.f;
         end
         if isfield(cached_mat_dict, 't8')
             cached_mat_dict.t800  = cached_mat_dict.t8;

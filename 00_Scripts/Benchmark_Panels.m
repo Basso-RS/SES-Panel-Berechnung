@@ -40,6 +40,7 @@ fprintf('%-6s | %5s %5s %6s | %5s %5s %6s | %5s %5s %6s | %6s %6s %6s | %5s %5s 
     '', 'Test', 'Calc', 'Diff', 'Test', 'Calc', 'Diff', 'Test', 'Calc', 'Diff', 'Test', 'Calc', 'Diff', 'Test', 'Calc', 'Diff');
 fprintf('%s\n', repmat('-', 1, 120));
 
+diff_t_24 = []; diff_e_24 = []; diff_uts_24 = []; diff_grad_24 = []; diff_energy_24 = [];
 diff_t_26 = []; diff_e_26 = []; diff_uts_26 = []; diff_grad_26 = []; diff_energy_26 = [];
 diff_t_27 = []; diff_e_27 = []; diff_uts_27 = []; diff_grad_27 = []; diff_energy_27 = [];
 t_start_total = tic;
@@ -49,14 +50,15 @@ for i = 5:size(T, 1)
     if isempty(val) || ismissing(string(val)), continue; end
     panel_id = string(val);
     
-    % --- FILTER LOGIK ---
-    if startsWith(panel_id, "26_")
+    % --- FILTER: Relevante Fertigungspanels (2024 Prio, 2026 ab #12, 2027) ---
+    if startsWith(panel_id, "24_")
+        % Alle validen 2024er Testpanels (Prio des Benutzers)
+    elseif startsWith(panel_id, "26_")
         num_part = sscanf(char(extractAfter(panel_id, "26_")), '%d');
-        % 2026 Panels bis #11 sowie Sonderpanels 26_17 und 26_19 komplett auslassen
-        if isempty(num_part) || num_part <= 11 || panel_id == "26_17" || panel_id == "26_19", continue; end
+        % 2026 Panels bis #11, ab #22 sowie Sonderpanels 26_17 (Delamination) und 26_19 (Flachs) auslassen
+        if isempty(num_part) || num_part <= 11 || num_part > 21 || panel_id == "26_17" || panel_id == "26_19", continue; end
     elseif startsWith(panel_id, "27_")
-        % Von 2027 die Panels 27_03 und 27_04 auslassen
-        if panel_id == "27_03" || panel_id == "27_04", continue; end
+        % Alle validen 2027er Panels (27_01 bis 27_04)
     else
         continue;
     end
@@ -77,13 +79,20 @@ for i = 5:size(T, 1)
     if isnan(grad_test) || grad_test <= 0, continue; end
     if isnan(core_t_val) || core_t_val <= 0, core_t_val = 18; end
     
-    % 1. Basis-Szenario und offizielle Kalibrierungsfunktion laden
-    Scenariodata;
-    Calib = Calibration();
+    % Für 27_03 und 27_04 ist der Kern zwingend 20 mm
+    if panel_id == "27_03" || panel_id == "27_04"
+        core_t_val = 20;
+    end
     
-    % 2. Nur die spezifischen Panel-Daten überschreiben:
-    Scenario.layup  = layup_str;
+    % 1. Basis-Szenario laden und Panel-spezifische Daten eintragen
+    Scenariodata;
+    Scenario.name = char(panel_id);
     Scenario.core_t = core_t_val;
+    
+    Scenario.layup = layup_str;
+    
+    % Einheitliche Kalibrierung (nur EINE Fertigungsmethode)
+    Calib = Calibration();
     
     try
         % 3. REINER AUFRUF DER BESTEHENDEN PROJEKTFUNKTIONEN (KEINE BERECHNUNG IM BENCHMARK)
@@ -107,7 +116,13 @@ for i = 5:size(T, 1)
         diff_grad   = (grad_calc - grad_test) / grad_test * 100;
         diff_energy = (energy_calc - e_test) / e_test * 100;
         
-        if startsWith(panel_id, "26_")
+        if startsWith(panel_id, "24_")
+            diff_t_24(end+1)      = abs(diff_t);
+            diff_e_24(end+1)      = abs(diff_emod);
+            diff_uts_24(end+1)    = abs(diff_uts);
+            diff_grad_24(end+1)   = abs(diff_grad);
+            diff_energy_24(end+1) = abs(diff_energy);
+        elseif startsWith(panel_id, "26_")
             diff_t_26(end+1)      = abs(diff_t);
             diff_e_26(end+1)      = abs(diff_emod);
             diff_uts_26(end+1)    = abs(diff_uts);
@@ -134,12 +149,22 @@ for i = 5:size(T, 1)
 end
 
 t_calc_total = toc(t_start_total);
+n_24 = length(diff_grad_24);
 n_26 = length(diff_grad_26);
 n_27 = length(diff_grad_27);
-n_total = n_26 + n_27;
+n_total = n_24 + n_26 + n_27;
 
 fprintf('%s\n', repmat('=', 1, 120));
+if n_24 > 0
+    fprintf('ZUSAMMENFASSUNG SAISON 2024 (%d Panels: 24_02 bis 24_20):\n', n_24);
+    fprintf('  - Mittlere absolute Abweichung Dicke:       %5.1f %%\n', mean(diff_t_24));
+    fprintf('  - Mittlere absolute Abweichung E-Modul:     %5.1f %%\n', mean(diff_e_24));
+    fprintf('  - Mittlere absolute Abweichung UTS:         %5.1f %%\n', mean(diff_uts_24));
+    fprintf('  - Mittlere absolute Abweichung Gradient:    %5.1f %%\n', mean(diff_grad_24));
+    fprintf('  - Mittlere absolute Abweichung Energie:     %5.1f %%\n', mean(diff_energy_24));
+end
 if n_26 > 0
+    fprintf('%s\n', repmat('-', 1, 120));
     fprintf('ZUSAMMENFASSUNG SAISON 2026 (%d Panels: 26_12 bis 26_21):\n', n_26);
     fprintf('  - Mittlere absolute Abweichung Dicke:       %5.1f %%\n', mean(diff_t_26));
     fprintf('  - Mittlere absolute Abweichung E-Modul:     %5.1f %%\n', mean(diff_e_26));
@@ -149,7 +174,7 @@ if n_26 > 0
 end
 if n_27 > 0
     fprintf('%s\n', repmat('-', 1, 120));
-    fprintf('ZUSAMMENFASSUNG SAISON 2027 (%d Panels: 27_01 & 27_02):\n', n_27);
+    fprintf('ZUSAMMENFASSUNG SAISON 2027 (%d Panels: 27_01 bis 27_04 inkl. 20 mm Wabenkern):\n', n_27);
     fprintf('  - Mittlere absolute Abweichung Dicke:       %5.1f %%\n', mean(diff_t_27));
     fprintf('  - Mittlere absolute Abweichung E-Modul:     %5.1f %%\n', mean(diff_e_27));
     fprintf('  - Mittlere absolute Abweichung UTS:         %5.1f %%\n', mean(diff_uts_27));
@@ -157,11 +182,16 @@ if n_27 > 0
     fprintf('  - Mittlere absolute Abweichung Energie:     %5.1f %%\n', mean(diff_energy_27));
 end
 fprintf('%s\n', repmat('-', 1, 120));
-fprintf('GESAMTERGEBNIS (%d ausgewählte Panels):\n', n_total);
-fprintf('  - Mittlere absolute Abweichung Dicke:       %5.1f %%\n', mean([diff_t_26, diff_t_27]));
-fprintf('  - Mittlere absolute Abweichung E-Modul:     %5.1f %%\n', mean([diff_e_26, diff_e_27]));
-fprintf('  - Mittlere absolute Abweichung UTS:         %5.1f %%\n', mean([diff_uts_26, diff_uts_27]));
-fprintf('  - Mittlere absolute Abweichung Gradient:    %5.1f %%\n', mean([diff_grad_26, diff_grad_27]));
-fprintf('  - Mittlere absolute Abweichung Energie:     %5.1f %%\n', mean([diff_energy_26, diff_energy_27]));
+fprintf('GESAMTERGEBNIS (%d ausgewählte Panels über 3 Saisons):\n', n_total);
+all_diff_t      = [diff_t_24, diff_t_26, diff_t_27];
+all_diff_e      = [diff_e_24, diff_e_26, diff_e_27];
+all_diff_uts    = [diff_uts_24, diff_uts_26, diff_uts_27];
+all_diff_grad   = [diff_grad_24, diff_grad_26, diff_grad_27];
+all_diff_energy = [diff_energy_24, diff_energy_26, diff_energy_27];
+fprintf('  - Mittlere absolute Abweichung Dicke:       %5.1f %%\n', mean(all_diff_t));
+fprintf('  - Mittlere absolute Abweichung E-Modul:     %5.1f %%\n', mean(all_diff_e));
+fprintf('  - Mittlere absolute Abweichung UTS:         %5.1f %%\n', mean(all_diff_uts));
+fprintf('  - Mittlere absolute Abweichung Gradient:    %5.1f %%\n', mean(all_diff_grad));
+fprintf('  - Mittlere absolute Abweichung Energie:     %5.1f %%\n', mean(all_diff_energy));
 fprintf('  - Gesamtrechenzeit: %.2f s (ca. %.2f ms pro Panel)\n', t_calc_total, (t_calc_total / max(1, n_total)) * 1000);
 fprintf('%s\n', repmat('=', 1, 120));

@@ -18,8 +18,12 @@ function Results = Energy_calc (Results, Curve, Scenario, Mdata)
         w_eff_max = max(0, w_max - slack);
         
         % Exaktes Integral der nicht-linearen Softening-Kurve bis zum Bruch bei w_max
-        grad = Results.Gradient;
-        beta = max(1.0, (grad * w_eff_max / max(1e-6, F_max)) - 1);
+        if isfield(Curve, 'beta') && ~isempty(Curve.beta)
+            beta = Curve.beta;
+        else
+            grad = Results.Gradient;
+            beta = max(1.0, (grad * w_eff_max / max(1e-6, F_max)) - 1);
+        end
         E_pre_fail = F_max * w_eff_max * (beta / (beta + 1));
         
         if strcmp(energy_mode, 'to_peak')
