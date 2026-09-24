@@ -1,39 +1,14 @@
 function [Best, TopList, Baseline] = optimize_laminate(Scenario, Calib, Targets, OptSettings)
-%% OPTIMIZE_LAMINATE Optimiert Material, Lagenanzahl und Winkel eines CFK-Sandwich-Panels
+% OPTIMIZE_LAMINATE Optimiert Material, Lagenanzahl und Winkel eines CFK-Sandwich-Panels.
 %
 % Syntax:
 %   [Best, TopList, Baseline] = optimize_laminate(Scenario, Calib, Targets, OptSettings)
-%
-% Inputs:
-%   Scenario    - Struct mit Panel-Geometrie (b, l, w, core_t, layup)
-%   Calib       - Struct mit Kalibrierungsfaktoren (aus Calibration.m)
-%   Targets     - Struct mit Zielwerten (0 = inaktiv):
-%                   .safety_factor [Faktor] (z.B. 1.15 = +15% Sicherheitsreserve)
-%                   .Gradient   [N/mm]   (Mindest-Biegesteifigkeit)
-%                   .Energy     [J]      (Mindest-Energieaufnahme)
-%                   .EI         [N*mm^2] (Mindest-Biegesteifigkeit)
-%                   .UTS        [MPa]    (Mindest-Bruchspannung)
-%                   .E          [GPa]    (Mindest-E-Modul Deckhaut)
-%                   .F_max      [N]      (Mindest-Bruchkraft)
-%                   .t_skin_max [mm]     (Maximale Deckhautdicke)
-%   OptSettings - Struct mit Suchoptionen:
-%                   .min_plies     (Default: 4)
-%                   .max_plies     (Default: 8)
-%                   .angle_mode    ('simple' oder 'advanced', Default: 'simple')
-%                   .material_pool ('all' oder 'standard', Default: 'all')
-%                   .core_interface_fabric (Default: true)
-%                   .verbose       (Default: true)
-%
-% Outputs:
-%   Best        - Struct des leichtesten zulässigen Panels
-%   TopList     - Array der Top-Kandidaten (sortiert nach Gewicht)
-%   Baseline    - Struct des Ausgangspanels zum direkten Vergleich
 
 if nargin < 1 || isempty(Scenario)
-    Scenariodata;
+    Scenario = Scenariodata();
 end
 if nargin < 2 || isempty(Calib)
-    Calib = Calibration(Scenario);
+    Calib = Calibration();
 end
 if nargin < 3 || isempty(Targets)
     Targets = struct();
@@ -42,9 +17,10 @@ if nargin < 4 || isempty(OptSettings)
     OptSettings = struct();
 end
 
-% Standardwerte für Targets
-if ~isfield(Targets, 'safety_factor'), Targets.safety_factor = 1.0; end
-if Targets.safety_factor <= 0,          Targets.safety_factor = 1.0; end
+% Standardwerte Targets
+if ~isfield(Targets, 'safety_factor') || Targets.safety_factor <= 0
+    Targets.safety_factor = 1.0;
+end
 SF = Targets.safety_factor;
 
 if ~isfield(Targets, 'Gradient'),   Targets.Gradient = 0;   end
@@ -55,7 +31,7 @@ if ~isfield(Targets, 'E'),          Targets.E = 0;          end
 if ~isfield(Targets, 'F_max'),      Targets.F_max = 0;      end
 if ~isfield(Targets, 't_skin_max'), Targets.t_skin_max = 0; end
 
-% Standardwerte für OptSettings
+% Standardwerte OptSettings
 if ~isfield(OptSettings, 'min_plies'),     OptSettings.min_plies = 4; end
 if ~isfield(OptSettings, 'max_plies'),     OptSettings.max_plies = 8; end
 if ~isfield(OptSettings, 'angle_mode'),    OptSettings.angle_mode = 'simple'; end
@@ -63,7 +39,7 @@ if ~isfield(OptSettings, 'material_pool'), OptSettings.material_pool = 'all'; en
 if ~isfield(OptSettings, 'core_interface_fabric'), OptSettings.core_interface_fabric = true; end
 if ~isfield(OptSettings, 'verbose'),       OptSettings.verbose = true; end
 
-% Sichtlagen-Option (Außenlage der Deckhaut): on / off & Material
+% Sichtlagen-Option
 if ~isfield(OptSettings, 'sichtlage_active')
     if isfield(OptSettings, 'sichtlage') && isfield(OptSettings.sichtlage, 'active')
         OptSettings.sichtlage_active = OptSettings.sichtlage.active;
@@ -85,7 +61,7 @@ if ~isfield(OptSettings, 'sichtlage_material')
     elseif isfield(OptSettings, 'outer_ply_material')
         OptSettings.sichtlage_material = OptSettings.outer_ply_material;
     else
-        OptSettings.sichtlage_material = 't7'; % Default: T700 Gewebe ('t7')
+        OptSettings.sichtlage_material = 't7';
     end
 end
 
@@ -95,49 +71,25 @@ if ~isfield(OptSettings, 'sichtlage_angle')
     elseif isfield(OptSettings, 'outer_ply_angle')
         OptSettings.sichtlage_angle = OptSettings.outer_ply_angle;
     else
-        OptSettings.sichtlage_angle = 45; % Default: 45°
+        OptSettings.sichtlage_angle = 45;
     end
 end
 
 this_dir = fileparts(mfilename('fullpath'));
 project_root = fileparts(this_dir);
-addpath(fullfile(project_root, '00_Scripts'), fullfile(project_root, '01_Functions'), fullfile(project_root, '02_Data'));
 csv_path = fullfile(project_root, '02_Data', 'materials.csv');
 
-%% 1. Materialdaten und Dichten laden
-mat_table = readtable(csv_path, 'Delimiter', ';');
-dict_density = containers.Map();
-dict_thickness = containers.Map();
-for r = 1:height(mat_table)
-    kname = lower(strtrim(mat_table.Kurzname{r}));
-    dict_density(kname) = mat_table.Dichte(r);
-    dict_thickness(kname) = mat_table.Dicke(r);
-end
+%% 1. Materialdaten über Singleton-Loader laden
+[mat_dict, ~, ~] = load_materials(csv_path);
 
-% Aliase
-alias_pairs = {
-    'ud', 'm'; 'm40jud', 'm';
-    't', 't7'; 't700', 't7'; 'ft700', 't7'; 't700f', 't7'; 'ft', 't7'; 'tf', 't7';
-    'fm40j', 'f'; 'm40jf', 'f'; 'mf', 'f'; 'm40jfabric', 'f'; 'm40j', 'f';
-    'zz300t', 'z'; 't800', 't8'; 't800s', 't8'
-};
-for a = 1:size(alias_pairs, 1)
-    k_src = alias_pairs{a, 2};
-    k_dst = alias_pairs{a, 1};
-    if isKey(dict_density, k_src)
-        dict_density(k_dst) = dict_density(k_src);
-        dict_thickness(k_dst) = dict_thickness(k_src);
-    end
-end
+panel_area_m2 = (Scenario.panel.b * Scenario.panel.l) / 1e6;
+core_rho = 7.5e-11;
+if isfield(mat_dict, 'core'), core_rho = mat_dict.core.rho; end
 
-panel_area_m2 = (Scenario.panel.b * Scenario.panel.l) / 1e6; % 0.11 m^2
-core_rho = 7.5e-11; % t/mm^3
-if isKey(dict_density, 'core'), core_rho = dict_density('core'); end
 gsm_cp_single = 150.0;
-if isKey(dict_thickness, 'cp') && isKey(dict_density, 'cp')
-    gsm_cp_single = dict_thickness('cp') * dict_density('cp') * 1e12;
+if isfield(mat_dict, 'cp')
+    gsm_cp_single = mat_dict.cp.t_ply * mat_dict.cp.rho * 1e12;
 end
-m_cp_g   = panel_area_m2 * (2 * gsm_cp_single); % 2x CP Klebefilm (oben & unten)
 
 %% 2. Baseline berechnen
 if OptSettings.verbose
@@ -174,10 +126,16 @@ Baseline.mass_core  = BaseWeight.mass_core;
 Baseline.mass_cp    = BaseWeight.mass_cp;
 Baseline.Curve      = BaseCurve;
 
-%% 3. Generierung aller regelkonformen Kandidaten
+%% 3. Generierung aller regelkonformen Kandidaten (ohne dynamisches Zellwachstum)
 if OptSettings.verbose
     if OptSettings.sichtlage_active
-        sicht_info = sprintf('ON (%d° %s)', OptSettings.sichtlage_angle, upper(OptSettings.sichtlage_material));
+        if iscell(OptSettings.sichtlage_material) || isstring(OptSettings.sichtlage_material)
+            mat_str = upper(strjoin(cellstr(OptSettings.sichtlage_material), ', '));
+        else
+            mat_str = upper(char(string(OptSettings.sichtlage_material)));
+        end
+        ang_str = strjoin(arrayfun(@(a) sprintf('%d°', a), OptSettings.sichtlage_angle, 'UniformOutput', false), '/');
+        sicht_info = sprintf('ON (%s %s)', ang_str, mat_str);
     else
         sicht_info = 'OFF (frei)';
     end
@@ -185,11 +143,12 @@ if OptSettings.verbose
         OptSettings.min_plies, OptSettings.max_plies, OptSettings.angle_mode, OptSettings.material_pool, sicht_info);
 end
 
-all_candidates = {};
-for n_plies = OptSettings.min_plies : OptSettings.max_plies
-    cands_n = generate_skin_candidates(n_plies, OptSettings);
-    all_candidates = [all_candidates, cands_n]; %#ok<AGROW>
+n_ply_range = OptSettings.min_plies : OptSettings.max_plies;
+cand_cells = cell(length(n_ply_range), 1);
+for idx = 1:length(n_ply_range)
+    cand_cells{idx} = generate_skin_candidates(n_ply_range(idx), OptSettings);
 end
+all_candidates = [cand_cells{:}];
 all_candidates = unique(all_candidates);
 
 n_total = length(all_candidates);
@@ -201,63 +160,55 @@ if OptSettings.verbose
     fprintf('Starte hierarchische 2-Stufen-Optimierung...\n\n');
 end
 
-%% 4. Sortierung nach theoretischem Mindestgewicht
+%% 4. Sortierung nach Mindestgewicht
 cand_weights = zeros(n_total, 1);
 for i = 1:n_total
-    cand_weights(i) = calc_skin_gsm(all_candidates{i}, dict_density, dict_thickness);
+    cand_weights(i) = calc_skin_gsm(all_candidates{i}, mat_dict);
 end
 [~, sort_idx] = sort(cand_weights, 'ascend');
 all_candidates = all_candidates(sort_idx);
 cand_weights = cand_weights(sort_idx);
 
-%% 5. Hierarchische Optimierungsschleife (mit Sicherheitsfaktor)
-feasible_list = {};
+%% 5. Hierarchische Optimierungsschleife (preallokierte Liste)
+feasible_list = cell(1, n_total);
+n_feas = 0;
 best_weight = inf;
 t_opt_start = tic;
 count_stg1_passed = 0;
 count_stg2_sims = 0;
 
-% Effektive Zielvorgaben inkl. Sicherheitsfaktor
-grad_target = Targets.Gradient * SF;
-ei_target   = Targets.EI * SF;
+grad_target   = Targets.Gradient * SF;
+ei_target     = Targets.EI * SF;
 energy_target = Targets.Energy * SF;
-uts_target  = Targets.UTS * SF;
-e_target    = (Targets.E * 1000) * SF; % GPa -> MPa
-fmax_target = Targets.F_max * SF;
+uts_target    = Targets.UTS * SF;
+e_target      = (Targets.E * 1000) * SF;
+fmax_target   = Targets.F_max * SF;
 
 for i = 1:n_total
     skin_str = all_candidates{i};
     skin_gsm = cand_weights(i);
     
-    % Pruning: Wenn wir schon mindestens 5 zulässige Lösungen haben,
-    % können wir Kandidaten verwerfen, die mehr als 15% schwerer sind als das beste gefundene
-    if length(feasible_list) >= 5 && skin_gsm > (1.15 * best_weight)
+    if n_feas >= 5 && skin_gsm > (1.15 * best_weight)
         continue;
     end
     
-    % Symmetrisches Vollpanel aufbauen:
-    % [TopSkin / cp / core / cp / TopSkin_reversed]
     parts = strsplit(skin_str, '/');
     rev_parts = fliplr(parts);
     full_layup = [skin_str, '/cp/', num2str(Scenario.core_t), 'core/cp/', strjoin(rev_parts, '/')];
     
-    % STUFE 1: KLT Schnell-Check (ohne teure nicht-lineare Energie-Kurve)
+    % Stufe 1: Schnelle KLT-Abschätzung
     t_factor = 0.95;
     if isfield(Calib, 'thickness_factor'), t_factor = Calib.thickness_factor; end
     
     cfk_props = calc_cfk_properties(full_layup, csv_path, false, t_factor, 1.0, 0.00262);
     
-    % Check Deckhautdicke (Geometrische Obergrenze)
     if Targets.t_skin_max > 0 && cfk_props.t_top > Targets.t_skin_max
         continue;
     end
-    
-    % Check E-Modul
     if e_target > 0 && cfk_props.E_top < e_target
         continue;
     end
     
-    % Schnellabschätzung Biegesteifigkeit EI
     z_top = Scenario.core_t/2 + cfk_props.t_top/2;
     I_eigen = (Scenario.panel.b * cfk_props.t_top^3) / 12;
     I_steiner = Scenario.panel.b * cfk_props.t_top * z_top^2;
@@ -268,18 +219,17 @@ for i = 1:n_total
         continue;
     end
     
-    % Schnellabschätzung Gradient
     grad_factor = 1.05;
     if isfield(Calib, 'gradient_factor'), grad_factor = Calib.gradient_factor; end
     grad_approx = (48 * EI_approx / (Scenario.panel.l^3)) * grad_factor;
     
-    if grad_target > 0 && grad_approx < (grad_target * 0.92) % Mit 8% Toleranz für Schubanteil
+    if grad_target > 0 && grad_approx < (grad_target * 0.92)
         continue;
     end
     
     count_stg1_passed = count_stg1_passed + 1;
     
-    % STUFE 2: Vollständige Simulation
+    % Stufe 2: Vollständige Simulation
     Scen_cand = Scenario;
     Scen_cand.layup = full_layup;
     Mdata = Materialdata(Scen_cand, Calib);
@@ -290,7 +240,6 @@ for i = 1:n_total
     Results = Energy_calc(Results, Curve, Scen_cand, Mdata);
     count_stg2_sims = count_stg2_sims + 1;
     
-    % Überprüfung aller aktiven Targets (inklusive Sicherheitsfaktor!)
     if grad_target > 0 && Results.Gradient < grad_target, continue; end
     if ei_target > 0 && Results.EI < ei_target, continue; end
     if energy_target > 0 && Results.Energy < energy_target, continue; end
@@ -298,13 +247,8 @@ for i = 1:n_total
     if e_target > 0 && Results.E < e_target, continue; end
     if fmax_target > 0 && Results.F_max < fmax_target, continue; end
     
-    % ZULÄSSIGE LÖSUNG GEFUNDEN!
     cand_gsm_core = Scenario.core_t * core_rho * 1e12;
-    gsm_cp_single = 150.0;
-    if isKey(dict_thickness, 'cp') && isKey(dict_density, 'cp')
-        gsm_cp_single = dict_thickness('cp') * dict_density('cp') * 1e12;
-    end
-    cand_gsm_cp   = 2 * gsm_cp_single; % 2 Lagen CP Klebefilm (oben & unten)
+    cand_gsm_cp   = 2 * gsm_cp_single;
     cand_gsm_skins = 2 * skin_gsm;
     cand_gsm_total = cand_gsm_skins + cand_gsm_core + cand_gsm_cp;
     cand_panel_mass = cand_gsm_total * panel_area_m2;
@@ -332,12 +276,14 @@ for i = 1:n_total
     entry.t_total    = Mdata.cfk.t_top + Mdata.core.t + Mdata.cfk.t_lower;
     entry.Curve      = Curve;
     
-    feasible_list{end+1} = entry; %#ok<AGROW>
+    n_feas = n_feas + 1;
+    feasible_list{n_feas} = entry;
     if skin_gsm < best_weight
         best_weight = skin_gsm;
     end
 end
 
+feasible_list = feasible_list(1:n_feas);
 t_opt_calc = toc(t_opt_start);
 
 %% 6. Auswertung und Rangliste
@@ -350,7 +296,6 @@ if isempty(feasible_list)
     return;
 end
 
-% Nach Panel-Masse sortieren
 masses = cellfun(@(x) x.mass_panel, feasible_list);
 [~, idx_rank] = sort(masses, 'ascend');
 feasible_list = feasible_list(idx_rank);
@@ -370,47 +315,73 @@ end
 %% ------------------- HILFSFUNKTIONEN ------------------- %%
 
 function cands = generate_skin_candidates(N, OptSettings)
-% Generiert alle regelkonformen, balancierten Top-Skin Lagenaufbauten mit N Lagen
-cands = {};
+% Generiert alle regelkonformen, balancierten Top-Skin Lagenaufbauten mit N Lagen.
 
-% Materialauswahl (Sigapreg und IMS ausgeschlossen)
 if strcmpi(OptSettings.material_pool, 'all')
-    fabric_opts = {'45t7', '45f', '45z'}; % T700 Fabric (t7), M40J Fabric (f), ZZ300T (z)
-    ud_mats     = {'m', 't8'};            % M40J UD (m), T800S UD (t8)
+    fabric_opts = {'45t7', '45f', '45z'};
+    ud_mats     = {'m', 't8'};
 else
-    fabric_opts = {'45t7'};               % Standard: T700 Fabric (t7)
-    ud_mats     = {'m', 't8'};            % Standard: M40J UD, T800S UD
+    fabric_opts = {'45t7'};
+    ud_mats     = {'m', 't8'};
 end
 
-% Winkelpalette
 if strcmpi(OptSettings.angle_mode, 'advanced')
     angles = [21, 30, 45, 60];
 else
-    angles = [21];
+    angles = 21;
 end
 
-% Sichtlage für Außenlage p1 (FSG T 3.5.7: Außenlage immer Gewebe)
+% FSG T 3.5.7: Außenlage immer Gewebe
 if OptSettings.sichtlage_active
-    s_mat = lower(strtrim(char(string(OptSettings.sichtlage_material))));
-    if startsWith(s_mat, 't7') || strcmp(s_mat, 't') || strcmp(s_mat, 't700')
-        s_mat = 't7'; % T700 Fabric
-    elseif startsWith(s_mat, 'm40') || strcmp(s_mat, 'f') || strcmp(s_mat, 'fm40j') || strcmp(s_mat, 'm40jf')
-        s_mat = 'f';  % M40J Fabric
-    elseif startsWith(s_mat, 'zz') || strcmp(s_mat, 'z') || strcmp(s_mat, 'zz300t')
-        s_mat = 'z';
+    raw_sicht = OptSettings.sichtlage_material;
+    if ischar(raw_sicht)
+        raw_sicht_list = {raw_sicht};
+    elseif isstring(raw_sicht)
+        raw_sicht_list = cellstr(raw_sicht);
+    elseif iscell(raw_sicht)
+        raw_sicht_list = raw_sicht;
+    else
+        raw_sicht_list = {'t7'};
     end
     
-    s_ang = 45;
-    if ~isempty(OptSettings.sichtlage_angle)
-        s_ang = OptSettings.sichtlage_angle;
+    norm_sicht_mats = cell(1, length(raw_sicht_list));
+    for i_s = 1:length(raw_sicht_list)
+        s_mat = lower(strtrim(char(string(raw_sicht_list{i_s}))));
+        if startsWith(s_mat, 't7') || strcmp(s_mat, 't') || strcmp(s_mat, 't700')
+            norm_sicht_mats{i_s} = 't7';
+        elseif startsWith(s_mat, 'm40') || strcmp(s_mat, 'f') || strcmp(s_mat, 'fm40j') || strcmp(s_mat, 'm40jf')
+            norm_sicht_mats{i_s} = 'f';
+        elseif startsWith(s_mat, 'zz') || strcmp(s_mat, 'z') || strcmp(s_mat, 'zz300t')
+            norm_sicht_mats{i_s} = 'z';
+        else
+            norm_sicht_mats{i_s} = s_mat;
+        end
+    end
+    norm_sicht_mats = unique(norm_sicht_mats, 'stable');
+    if isempty(norm_sicht_mats)
+        norm_sicht_mats = {'t7'};
     end
     
-    p1_opts = {[num2str(s_ang), s_mat]};
+    s_angs = OptSettings.sichtlage_angle;
+    if isempty(s_angs)
+        s_angs = 45;
+    end
+    
+    p1_opts = cell(1, length(s_angs) * length(norm_sicht_mats));
+    k_p1 = 0;
+    for i_a = 1:length(s_angs)
+        ang_val = s_angs(i_a);
+        for i_m = 1:length(norm_sicht_mats)
+            k_p1 = k_p1 + 1;
+            p1_opts{k_p1} = [num2str(ang_val), norm_sicht_mats{i_m}];
+        end
+    end
 else
-    p1_opts = fabric_opts; % T 3.5.7: Außenlage immer Gewebe (aus Pool)
+    p1_opts = fabric_opts;
 end
+
 if OptSettings.core_interface_fabric
-    pn_opts = fabric_opts; % Kernlage bevorzugt Gewebe
+    pn_opts = fabric_opts;
 else
     pn_opts = [fabric_opts, cellfun(@(u) ['0', u], ud_mats, 'UniformOutput', false)];
 end
@@ -418,23 +389,29 @@ end
 n_mid = N - 2;
 mid_configs = get_balanced_mids(n_mid, ud_mats, angles, fabric_opts);
 
+total_combos = length(p1_opts) * length(pn_opts) * length(mid_configs);
+cands = cell(1, total_combos);
+n_valid = 0;
+
 for i1 = 1:length(p1_opts)
     p1 = p1_opts{i1};
     for in = 1:length(pn_opts)
         pn = pn_opts{in};
         for im = 1:length(mid_configs)
-            full_skin = [ {p1}, mid_configs{im}, {pn} ];
+            full_skin = [{p1}, mid_configs{im}, {pn}];
             if is_fsg_compliant(full_skin)
-                cands{end+1} = strjoin(full_skin, '/'); %#ok<AGROW>
+                n_valid = n_valid + 1;
+                cands{n_valid} = strjoin(full_skin, '/');
             end
         end
     end
 end
+cands = cands(1:n_valid);
 
 end
 
 function mids = get_balanced_mids(n_mid, ud_mats, angles, fabric_opts)
-mids = {};
+% Erzeugt balancierte Lagenkonfigurationen für Innenlagen ohne dynamisches Zellwachstum.
 
 if n_mid == 0
     mids = {{}};
@@ -442,44 +419,57 @@ if n_mid == 0
 end
 
 if n_mid == 1
-    % 1 Innenlage: Kann nur 0-UD oder Gewebe sein (Winkel müssen balanciert sein)
+    mids = cell(1, length(ud_mats) + length(fabric_opts));
+    k = 0;
     for m = 1:length(ud_mats)
-        mids{end+1} = {['0', ud_mats{m}]}; %#ok<AGROW>
+        k = k + 1;
+        mids{k} = {['0', ud_mats{m}]};
     end
     for f = 1:length(fabric_opts)
-        mids{end+1} = {fabric_opts{f}}; %#ok<AGROW>
+        k = k + 1;
+        mids{k} = {fabric_opts{f}};
     end
     return;
 end
 
 if n_mid == 2
-    % Option A: Zwei 0-UD
+    nA = length(ud_mats)^2;
+    nB = length(ud_mats) * length(angles) * 2;
+    nC = length(fabric_opts) * length(ud_mats) * 2;
+    mids = cell(1, nA + nB + nC);
+    k = 0;
     for m1 = 1:length(ud_mats)
         for m2 = 1:length(ud_mats)
-            mids{end+1} = {['0', ud_mats{m1}], ['0', ud_mats{m2}]}; %#ok<AGROW>
+            k = k + 1;
+            mids{k} = {['0', ud_mats{m1}], ['0', ud_mats{m2}]};
         end
     end
-    % Option B: Ein balanciertes Winkelpaar (+ang, -ang)
     for m = 1:length(ud_mats)
         u = ud_mats{m};
         for a = 1:length(angles)
             ang = angles(a);
-            mids{end+1} = {[num2str(ang), u], ['-', num2str(ang), u]}; %#ok<AGROW>
-            mids{end+1} = {['-', num2str(ang), u], [num2str(ang), u]}; %#ok<AGROW>
+            k = k + 1;
+            mids{k} = {[num2str(ang), u], ['-', num2str(ang), u]};
+            k = k + 1;
+            mids{k} = {['-', num2str(ang), u], [num2str(ang), u]};
         end
     end
-    % Option C: Gewebe + 0-UD
     for f = 1:length(fabric_opts)
         for m = 1:length(ud_mats)
-            mids{end+1} = {fabric_opts{f}, ['0', ud_mats{m}]}; %#ok<AGROW>
-            mids{end+1} = {['0', ud_mats{m}], fabric_opts{f}}; %#ok<AGROW>
+            k = k + 1;
+            mids{k} = {fabric_opts{f}, ['0', ud_mats{m}]};
+            k = k + 1;
+            mids{k} = {['0', ud_mats{m}], fabric_opts{f}};
         end
     end
     return;
 end
 
 if n_mid == 3
-    % 1x 0-UD + 1 balanciertes Paar
+    nA = length(ud_mats)^2 * length(angles) * 6;
+    nB = length(fabric_opts) * length(ud_mats) * length(angles) * 3;
+    mids = cell(1, nA + nB);
+    k = 0;
     for m_zero = 1:length(ud_mats)
         u0 = ['0', ud_mats{m_zero}];
         for m_p = 1:length(ud_mats)
@@ -487,16 +477,15 @@ if n_mid == 3
             for a = 1:length(angles)
                 ang = angles(a);
                 pp = [num2str(ang), up]; pn = ['-', num2str(ang), up];
-                mids{end+1} = {u0, pp, pn}; %#ok<AGROW>
-                mids{end+1} = {u0, pn, pp}; %#ok<AGROW>
-                mids{end+1} = {pp, u0, pn}; %#ok<AGROW>
-                mids{end+1} = {pn, u0, pp}; %#ok<AGROW>
-                mids{end+1} = {pp, pn, u0}; %#ok<AGROW>
-                mids{end+1} = {pn, pp, u0}; %#ok<AGROW>
+                k = k + 1; mids{k} = {u0, pp, pn};
+                k = k + 1; mids{k} = {u0, pn, pp};
+                k = k + 1; mids{k} = {pp, u0, pn};
+                k = k + 1; mids{k} = {pn, u0, pp};
+                k = k + 1; mids{k} = {pp, pn, u0};
+                k = k + 1; mids{k} = {pn, pp, u0};
             end
         end
     end
-    % 1x Gewebe + 1 balanciertes Paar
     for f = 1:length(fabric_opts)
         fab = fabric_opts{f};
         for m_p = 1:length(ud_mats)
@@ -504,9 +493,9 @@ if n_mid == 3
             for a = 1:length(angles)
                 ang = angles(a);
                 pp = [num2str(ang), up]; pn = ['-', num2str(ang), up];
-                mids{end+1} = {fab, pp, pn}; %#ok<AGROW>
-                mids{end+1} = {pp, fab, pn}; %#ok<AGROW>
-                mids{end+1} = {pp, pn, fab}; %#ok<AGROW>
+                k = k + 1; mids{k} = {fab, pp, pn};
+                k = k + 1; mids{k} = {pp, fab, pn};
+                k = k + 1; mids{k} = {pp, pn, fab};
             end
         end
     end
@@ -514,7 +503,10 @@ if n_mid == 3
 end
 
 if n_mid == 4
-    % 2x 0-UD + 1 balanciertes Paar
+    nA = length(ud_mats)^3 * length(angles) * 5;
+    nB = length(ud_mats)^2 * length(angles)^2 * 2;
+    mids = cell(1, nA + nB);
+    k = 0;
     for m1 = 1:length(ud_mats)
         u0_1 = ['0', ud_mats{m1}];
         for m2 = 1:length(ud_mats)
@@ -524,16 +516,15 @@ if n_mid == 4
                 for a = 1:length(angles)
                     ang = angles(a);
                     pp = [num2str(ang), up]; pn = ['-', num2str(ang), up];
-                    mids{end+1} = {u0_1, u0_2, pp, pn}; %#ok<AGROW>
-                    mids{end+1} = {u0_1, pp, u0_2, pn}; %#ok<AGROW>
-                    mids{end+1} = {pp, u0_1, u0_2, pn}; %#ok<AGROW>
-                    mids{end+1} = {pp, u0_1, pn, u0_2}; %#ok<AGROW>
-                    mids{end+1} = {pp, pn, u0_1, u0_2}; %#ok<AGROW>
+                    k = k + 1; mids{k} = {u0_1, u0_2, pp, pn};
+                    k = k + 1; mids{k} = {u0_1, pp, u0_2, pn};
+                    k = k + 1; mids{k} = {pp, u0_1, u0_2, pn};
+                    k = k + 1; mids{k} = {pp, u0_1, pn, u0_2};
+                    k = k + 1; mids{k} = {pp, pn, u0_1, u0_2};
                 end
             end
         end
     end
-    % 2 balancierte Paare
     for m1 = 1:length(ud_mats)
         up1 = ud_mats{m1};
         for a1 = 1:length(angles)
@@ -544,8 +535,8 @@ if n_mid == 4
                 for a2 = 1:length(angles)
                     ang2 = angles(a2);
                     pp2 = [num2str(ang2), up2]; pn2 = ['-', num2str(ang2), up2];
-                    mids{end+1} = {pp1, pn1, pp2, pn2}; %#ok<AGROW>
-                    mids{end+1} = {pp1, pp2, pn2, pn1}; %#ok<AGROW>
+                    k = k + 1; mids{k} = {pp1, pn1, pp2, pn2};
+                    k = k + 1; mids{k} = {pp1, pp2, pn2, pn1};
                 end
             end
         end
@@ -554,71 +545,93 @@ if n_mid == 4
 end
 
 if n_mid >= 5
-    % Rekursiver Fallback mit automatischem Clumping-Filter
     base_mids = get_balanced_mids(n_mid - 2, ud_mats, angles, fabric_opts);
-    for b = 1:min(100, length(base_mids))
+    n_base = min(100, length(base_mids));
+    n_combos = n_base * length(ud_mats) * length(angles);
+    mids = cell(1, n_combos);
+    k = 0;
+    for b = 1:n_base
         sub = base_mids{b};
         for m = 1:length(ud_mats)
             u = ud_mats{m};
             for a = 1:length(angles)
                 ang = angles(a);
-                mids{end+1} = [{[num2str(ang), u]}, sub, {['-', num2str(ang), u]}]; %#ok<AGROW>
+                k = k + 1;
+                mids{k} = [{[num2str(ang), u]}, sub, {['-', num2str(ang), u]}];
             end
         end
     end
+    return;
 end
 
 end
 
 function compliant = is_fsg_compliant(plies)
+% Prüft FSG-Regelkonformität (Außenlage, Balancierung, 50%-Regel, Anti-Clumping)
 compliant = false;
 N = length(plies);
 
-% 1. FSG T 3.5.7: Äußerste Lage MUSS Gewebe sein
+% 1. FSG T 3.5.7: Äußerste Lage muss Gewebe sein
 p1 = plies{1};
 if ~contains(p1, 'f') && ~contains(p1, 't') && ~contains(p1, 'z')
     return;
 end
 
-% 2. Balance: Für jedes +Winkel muss ein -Winkel des gleichen Materials existieren
-counts_map = containers.Map();
+% 2. Balancierung: Paarweiser Winkelabgleich ohne containers.Map
+ang_list = zeros(1, N);
+mat_list = cell(1, N);
+n_ang = 0;
+
 for i = 1:N
     p = plies{i};
     if contains(p, 'f') || contains(p, 't') || contains(p, 'z')
-        continue; % Gewebe ist von sich aus balanciert
+        continue; % Gewebe ist eigenbalanciert
     end
-    c = p; idx = 1;
-    if c(1) == '-' || c(1) == '+', idx = 2; end
-    while idx <= length(c) && c(idx) >= '0' && c(idx) <= '9'
-        idx = idx + 1;
+    [ang, mat] = parse_ply_token(p);
+    if ang == 0 || ang == 90
+        continue;
     end
-    ang = sscanf(c(1:idx-1), '%f');
-    mat = c(idx:end);
-    if ang == 0 || ang == 90, continue; end
-    
-    key = [num2str(abs(ang)), '_', mat];
-    sign_val = sign(ang);
-    if isKey(counts_map, key)
-        counts_map(key) = counts_map(key) + sign_val;
-    else
-        counts_map(key) = sign_val;
+    n_ang = n_ang + 1;
+    ang_list(n_ang) = ang;
+    mat_list{n_ang} = mat;
+end
+
+if mod(n_ang, 2) ~= 0
+    return; % Ungerade Anzahl an Winkellagen
+end
+
+if n_ang > 0
+    matched = false(1, n_ang);
+    for j = 1:n_ang
+        if matched(j), continue; end
+        opp_idx = 0;
+        for k = j+1:n_ang
+            if ~matched(k) && (ang_list(k) == -ang_list(j)) && strcmp(mat_list{k}, mat_list{j})
+                opp_idx = k;
+                break;
+            end
+        end
+        if opp_idx == 0
+            return;
+        end
+        matched(j) = true;
+        matched(opp_idx) = true;
     end
 end
 
-keys_all = keys(counts_map);
-for k = 1:length(keys_all)
-    if counts_map(keys_all{k}) ~= 0
-        return; % Unbalanciertes Winkelpaar
+% 3. FSG T 3.5.3: Max. 50% 0°-Lagen
+count_zero = 0;
+for i = 1:N
+    p = plies{i};
+    if p(1) == '0'
+        count_zero = count_zero + 1;
     end
 end
-
-% 3. FSG T 3.5.3: 50%-Regel für 0°-Lagen
-count_zero = sum(cellfun(@(x) startsWith(x, '0'), plies));
 if (count_zero / N) > 0.50
     return;
 end
 
-% 4. Ply-Clumping: Nicht mehr als 2 gleiche Lagen hintereinander
+% 4. Anti-Clumping: Max. 2 identische Lagen hintereinander
 consec = 1;
 for i = 2:N
     if strcmp(plies{i}, plies{i-1})
@@ -634,39 +647,20 @@ end
 compliant = true;
 end
 
-function gsm = calc_skin_gsm(layup_str, dict_rho, dict_t)
-% Berechnet das Flächengewicht (g/m^2) einer Deckhaut (Top Skin)
-parts = strsplit(layup_str, '/');
-% Wenn ein Kern enthalten ist, nur die obere Deckhaut (vor dem Kern) betrachten
-idx_core = find(contains(lower(parts), 'core'), 1);
-if ~isempty(idx_core)
-    parts = parts(1:idx_core-1);
-end
-
+function gsm = calc_skin_gsm(layup_str, mat_dict)
+% Berechnet das Flächengewicht (g/m^2) einer Deckhaut (Top Skin).
+top_plies = parse_layup(layup_str);
 gsm = 0;
-for i = 1:length(parts)
-    p = lower(strtrim(parts{i}));
-    if isempty(p) || strcmp(p, 'cp'), continue; end
-    
-    % Material extrahieren (nach Winkel)
-    c = p;
-    idx = 1;
-    if c(1) == '-' || c(1) == '+', idx = 2; end
-    while idx <= length(c) && c(idx) >= '0' && c(idx) <= '9'
-        idx = idx + 1;
-    end
-    mat_code = c(idx:end);
-    
-    t_ply = 0.22; % Default
+for i = 1:length(top_plies)
+    p = top_plies{i};
+    if isempty(p) || strcmpi(p, 'cp'), continue; end
+    [~, mat_code] = parse_ply_token(p);
+    t_ply = 0.22;
     rho_ply = 1.5e-9;
-    
-    if isKey(dict_t, mat_code)
-        t_ply = dict_t(mat_code);
+    if isfield(mat_dict, mat_code)
+        t_ply = mat_dict.(mat_code).t_ply;
+        rho_ply = mat_dict.(mat_code).rho;
     end
-    if isKey(dict_rho, mat_code)
-        rho_ply = dict_rho(mat_code);
-    end
-    
     gsm = gsm + (t_ply * rho_ply * 1e12);
 end
 end
@@ -702,8 +696,13 @@ if Targets.t_skin_max > 0
 end
 if nargin >= 5 && isfield(OptSettings, 'sichtlage_active')
     if OptSettings.sichtlage_active
-        fprintf('  - Sichtlage:       ON  (Material: %s, Winkel: %d°)\n', ...
-            upper(OptSettings.sichtlage_material), OptSettings.sichtlage_angle);
+        if iscell(OptSettings.sichtlage_material) || isstring(OptSettings.sichtlage_material)
+            mat_disp = upper(strjoin(cellstr(OptSettings.sichtlage_material), ', '));
+        else
+            mat_disp = upper(char(string(OptSettings.sichtlage_material)));
+        end
+        ang_disp = strjoin(arrayfun(@(a) sprintf('%d°', a), OptSettings.sichtlage_angle, 'UniformOutput', false), '/');
+        fprintf('  - Sichtlage:       ON  (Material: %s, Winkel: %s)\n', mat_disp, ang_disp);
     else
         fprintf('  - Sichtlage:       OFF (freie Materialoptimierung)\n');
     end
@@ -740,16 +739,16 @@ fprintf('  %-26s | %8.1f MPa               | %8.1f MPa               | %+6.1f%%\
 fprintf('----------------------------------------------------------------------------------------------------\n\n');
 
 fprintf('TOP-%d LEICHTESTE REGELKONFORME LAMINATE:\n', length(TopList));
-fprintf('%-4s | %-7s | %-10s | %-8s | %-12s | %-10s | %-24s | %-45s\n', ...
-    'Rang', 'Masse', 'Gesamt-GSM', 'Delta', 'Gradient', 'Energie', 'Top-Skin', 'Voll-Lagenaufbau (inkl. CP & Kern)');
-fprintf('%-4s | %-7s | %-10s | %-8s | %-12s | %-10s | %-24s | %-45s\n', ...
-    '', '[g]', '[g/m^2]', '[%]', '[N/mm]', '[J]', '', '');
-fprintf('%s\n', repmat('-', 1, 140));
+fprintf('%-4s | %-8s | %-12s | %-8s | %-11s | %-9s | %s\n', ...
+    'Rang', 'Masse', 'Gesamt-GSM', 'Delta', 'Gradient', 'Energie', 'Lagenaufbau (Halbschale)');
+fprintf('%-4s | %-8s | %-12s | %-8s | %-11s | %-9s | %s\n', ...
+    '', '[g]', '[g/m^2]', '[%]', '[N/mm]', '[J]', '');
+fprintf('%s\n', repmat('-', 1, 100));
 for r = 1:length(TopList)
     cand = TopList(r);
     cand_delta_pct = ((cand.mass_panel - Base.mass_panel) / Base.mass_panel) * 100;
-    fprintf('#%-3d | %6.1f  | %6.0f     | %+6.1f%% | %6.0f N/mm | %6.1f J   | %-24s | %s\n', ...
-        r, cand.mass_panel, cand.gsm_total, cand_delta_pct, cand.Gradient, cand.Energy, cand.top_skin, cand.layup);
+    fprintf('#%-3d | %6.1f g | %6.0f g/m^2 | %+6.1f%% | %5.0f N/mm | %5.1f J   | %s\n', ...
+        r, cand.mass_panel, cand.gsm_total, cand_delta_pct, cand.Gradient, cand.Energy, cand.top_skin);
 end
 fprintf('====================================================================================================\n\n');
 end

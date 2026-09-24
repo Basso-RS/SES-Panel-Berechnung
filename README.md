@@ -21,16 +21,12 @@ Die aktuelle Entwicklung zielt auf folgende Kernpunkte ab:
 *Hinweis: Dieser Abschnitt wird im Laufe der weiteren Entwicklung zu einem detaillierten Benutzerhandbuch ausgebaut.*
 
 ### 1. Projektstruktur
-- `00_Scripts/`: Enthält das ausführende Hauptskript (`RunMe.m`). Hier läuft die Berechnung zusammen.
-- `01_Functions/`: Beinhaltet die mathematischen und physikalischen Kernfunktionen (`EI_calc.m`, `Shearstiff_calc.m`, `Deflection.m`).
-- `02_Data/`: Beinhaltet die Definition der Eingabedaten und Randbedingungen (`Materialdata.m`).
+- `00_Scripts/`: Einstiegsskripte für Einzelsimulation (`Calculate_Single_Panel.m`), Optimierung (`Optimize_Panel.m`) und Benchmarks (`Benchmark_Panels.m`).
+- `01_Functions/`: Physikalische und mathematische Kernfunktionen (KLT, Hashin, Durchbiegung, Energie, Gewichtsberechnung).
+- `02_Data/`: Materialdatenbank (`materials.csv`), Regelwerke (FSG) und experimentelle Prüfstands-Daten.
+- `03_Research/`: Forschungsberichte, Voruntersuchungen, extrahierte Daten und KI-Entwicklungsartefakte.
 
 ### 2. Nutzung (Kurzanleitung)
-1. **Parameter anpassen**: Öffne die Datei `02_Data/Materialdata.m` in MATLAB. Hier kannst du die Geometrie des Panels (Breite, Stützweite) sowie die Materialkennwerte (Dicken, E-Modul der Deckschichten, Schubmodul des Kerns) eintragen.
-2. **Berechnung starten**: Führe das Skript `00_Scripts/RunMe.m` aus.
-3. **Ergebnisse ablesen**: Alle berechneten Werte (Kräfte, Energie, Steifigkeiten) werden am Ende im MATLAB-Workspace in der Struktur `Results` gespeichert. 
-
-### 3. Ausstehende / Geplante Features
-- [ ] Visualisierung des Kraft-Weg-Verlaufs als Diagramm.
-- [ ] Berechnung kritischer Versagenslasten (Kernschubversagen, Deckschichtversagen).
-- [ ] Möglicher automatisierter Export der Ergebnisse direkt in das Excel-Sheet (`FS26_SES_...xlsx`).
+1. **Einzelsimulation**: Öffne `01_Functions/Scenariodata.m` für den gewünschten Lagenaufbau und führe `00_Scripts/Calculate_Single_Panel.m` (oder `RunMe.m`) aus.
+2. **Laminat-Optimierung**: Führe `00_Scripts/Optimize_Panel.m` aus, um automatisiert das leichteste regelkonforme Laminat mit Zielsteifigkeit und Mindestenergie zu finden.
+3. **Validierung / Benchmark**: Führe `00_Scripts/Benchmark_Panels.m` aus, um die Simulation gegen alle realen Prüfstandsergebnisse abzugleichen.

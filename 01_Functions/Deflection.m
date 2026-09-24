@@ -1,71 +1,70 @@
-function [Results, Curve] = Deflection (Results,Scenario,Mdata)
-%% DEFLECTION Berechnet Biegung, Gradient, Bruchlasten und Kraft-Weg-Verlauf
+function [Results, Curve] = Deflection(Results, Scenario, Mdata)
+%% DEFLECTION - Physikalische Berechnung von Gradient, Bruchkraft und Kraft-Weg-Kurve
+% unter Berücksichtigung von Euler-Bernoulli-Biegesteifigkeit, Mehr-Moden-Versagen
+% und kalibriertem Traversen-Softening.
 
-    L = Scenario.panel.l;
-    b = Scenario.panel.b;
+    % Biegungsanteil nach SES (Euler-Bernoulli Dreipunktbiegung)
+    nenner = Scenario.panel.l^3 / (48 * Results.EI);
 
-    % 1. Gradient nach offizieller SES Euler-Bernoulli Biegeformel [N/mm]
-    % (Verifiziert als präziseste Formel mit nur 6.7% mittlerer Abweichung zu den 2024er Testpanels)
-    grad_scale = 1.0;
-    if isfield(Mdata, 'gradient_factor') && ~isempty(Mdata.gradient_factor)
-        grad_scale = Mdata.gradient_factor;
+    % Kernschubanteil (falls aktiviert)
+    if isfield(Scenario, 'include_core_shear') && Scenario.include_core_shear
+        if ~isfield(Results, 'S') || isempty(Results.S) || Results.S == 0
+            Results = Shearstiff_calc(Results, Mdata, Scenario);
+        end
+        nenner = nenner + Scenario.panel.l / (4 * Results.S);
     end
-    Results.Gradient = ((48 * Results.EI) / (L^3)) * grad_scale;
 
-%% Analytische Bestimmung der Versagensmodi (Multi-Mode Failure Envelope)
-    if isfield(Results, 'y_max') && Results.y_max > 0
+    % Gradient (Gesamtsteifigkeit) [N/mm]
+    grad_factor = 1.0;
+    if isfield(Mdata, 'gradient_factor') && ~isempty(Mdata.gradient_factor)
+        grad_factor = Mdata.gradient_factor;
+    end
+    Results.Gradient = (1 / nenner) * grad_factor;
+
+    % 1. Versagensmoden berechnen
+    % A. Deckhaut-Bruchspannung (Biegemoment M = F * L / 4)
+    if isfield(Results, 'y_max') && ~isempty(Results.y_max)
         y_max = Results.y_max;
     else
         y_max = Mdata.core.t/2 + Mdata.cfk.t_top;
     end
-    
-    % 1. Deckhautbruch (Zug- oder Druckversagen / UTS)
-    if isfield(Mdata.cfk, 'UTS') && ~isnan(Mdata.cfk.UTS) && Mdata.cfk.UTS > 0
-        F_skin_fail = (Mdata.cfk.UTS * 4 * Results.I) / (L * y_max);
+    F_skin = (4 * Results.I * Mdata.cfk.UTS) / (Scenario.panel.l * y_max);
+
+    % B. Kern-Schubbruch (Querkraft V = F / 2)
+    F_core = 2 * Scenario.panel.b * Mdata.core.t * Mdata.core.tau_max;
+
+    % C. Deckhaut-Knicken / Wrinkling (Hoff-Mautner Kriterium)
+    if isfield(Mdata.core, 'G') && Mdata.core.G > 0
+        sigma_wrinkling = 0.5 * (Mdata.cfk.E_top * 92.0 * Mdata.core.G)^(1/3);
+        F_wrinkling = (4 * Results.I * sigma_wrinkling) / (Scenario.panel.l * y_max);
     else
-        F_skin_fail = inf;
+        F_wrinkling = inf;
     end
-    
-    % 2. Kernschubversagen (Core Shear Failure nach ASTM C393: tau_max = V / (b*d))
-    d_core = Mdata.core.t + (Mdata.cfk.t_top + Mdata.cfk.t_lower) / 2;
-    if isfield(Mdata.core, 'tau_max') && ~isnan(Mdata.core.tau_max) && Mdata.core.tau_max > 0
-        % V_max = F / 2  =>  F_core = 2 * b * d * tau_max
-        F_core_fail = 2 * b * d_core * Mdata.core.tau_max;
-    else
-        F_core_fail = inf;
-    end
-    
-    % 3. Deckhaut-Knicken / Wrinkling (Hoff-Mautner / Plantema)
-    E_core_z = 92; % MPa (PAMG 5056 Wabenkern Druckmodul)
-    sigma_wrinkling = 0.5 * (Mdata.cfk.E_top * E_core_z * Mdata.core.G)^(1/3);
-    F_wrinkling_fail = (sigma_wrinkling * 4 * Results.I) / (L * y_max);
-    
-    % Maßgebliche Bruchlast bestimmen
-    [F_max, fail_idx] = min([F_skin_fail, F_core_fail, F_wrinkling_fail]);
+
+    % Minimale Versagenskraft ermitteln
+    [F_max, fail_idx] = min([F_skin, F_core, F_wrinkling]);
     fail_modes = {'Deckhautbruch (UTS)', 'Kernschubbruch (Core Shear)', 'Deckhautknicken (Wrinkling)'};
     Results.failure_mode = fail_modes{fail_idx};
-    Results.F_skin = F_skin_fail;
-    Results.F_core = F_core_fail;
-    Results.F_wrinkling = F_wrinkling_fail;
+    Results.F_max = F_max;
+    Results.F_skin = F_skin;
+    Results.F_core = F_core;
+    Results.F_wrinkling = F_wrinkling;
 
-    % Linear-elastischer Biegeweg
+    % Bruchweg (Linearer elastischer Biegeweg + Traversen-Softening + Rolleneindrückung)
     w_lin = F_max / Results.Gradient;
-    
-    % Reale Durchbiegung am Peak unter Berücksichtigung von Kernplastizität & Rolleneindrückung
     softening = 0.52;
     if isfield(Mdata, 'softening_factor') && ~isempty(Mdata.softening_factor)
         softening = Mdata.softening_factor;
     end
-    
-    delta_indent = 1.0;
+    indentation = 1.0;
     if isfield(Mdata, 'indentation_depth') && ~isempty(Mdata.indentation_depth)
-        delta_indent = Mdata.indentation_depth;
+        indentation = Mdata.indentation_depth;
     end
-    
-    w_max = (w_lin / softening) + delta_indent + Scenario.panel.slack;
+    w_max = (w_lin / softening) + indentation;
+    Results.w_max = w_max;
 
-%% Curve Struct (vektorisiert erzeugt, ohne for-Schleife)
-    if nargout > 1
+    % 2. Kraft-Weg-Kurve nur bei Anforderung berechnen
+    if nargout >= 2
         Curve = struct();
         n_steps = 200;
         w_limit = max(Scenario.panel.w, w_max);
@@ -76,25 +75,18 @@ function [Results, Curve] = Deflection (Results,Scenario,Mdata)
         w_eff_max = max(1e-6, w_max - Scenario.panel.slack);
         idx_pre = (Curve.w <= w_max);
         
-        % Nicht-lineare Softening-Kurve bis zum Bruch bei w_max
-        % (Tangente bei w=0 entspricht dem SES-Biegegradienten, Tangente bei w_max geht horizontal über)
-        beta = max(1.0, (Results.Gradient * w_eff_max / F_max) - 1);
+        % Option A: Physikalisch konsistente Anfangssteigung dF/dw bei w=0 entspricht exakt Results.Gradient
+        beta_curve  = max(1.0, (Results.Gradient * w_eff_max / F_max));
+        beta_energy = max(1.0, (Results.Gradient * w_eff_max / F_max) - 1.0);
         xi = min(1.0, eff_w(idx_pre) / w_eff_max);
-        Curve.F(idx_pre)  = F_max * (1 - (1 - xi).^beta);
-        
-        % Nachbruch-Restkraftplateau
+        Curve.F(idx_pre)  = F_max * (1 - (1 - xi).^beta_curve);
         Curve.F(~idx_pre) = F_max * Mdata.post_fail_factor;
         
         Curve.F_max = F_max;
         Curve.w_max = w_max;
-        Curve.beta  = beta;
+        Curve.beta  = beta_energy; % Behaelt kalibrierte Energieberechnung bei
     end
 
-    % Wichtige physikalische Kennwerte direkt in Results speichern
-    Results.F_max = F_max;
-    Results.w_max = w_max;
-
-    % Kurvencharakter & Plausibilitätsbewertung nach Versagensmodus
     switch Results.failure_mode
         case 'Deckhautbruch (UTS)'
             Results.curve_character = 'Linear-spröde (Faserbruch)';
@@ -110,4 +102,4 @@ function [Results, Curve] = Deflection (Results,Scenario,Mdata)
             Results.energy_plausibility = 'Plausibel: Lokales Hautknicken';
     end
 
-end 
+end

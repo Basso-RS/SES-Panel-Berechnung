@@ -1,33 +1,24 @@
 function Mdata = Materialdata(Scenario, Calib)
-%% MATERIALDATA Erstellt das Materialdaten-Struct für die Berechnung
-% Syntax: Mdata = Materialdata(Scenario, Calib)
+% MATERIALDATA Erstellt das Materialdaten-Struct für die Berechnung.
 
-if nargin < 1
-    if evalin('base', 'exist(''Scenario'', ''var'')')
-        Scenario = evalin('base', 'Scenario');
-    else
-        Scenariodata;
-    end
+if nargin < 1 || isempty(Scenario)
+    Scenario = Scenariodata();
 end
 
 if nargin < 2 || isempty(Calib)
-    if evalin('base', 'exist(''Calib'', ''var'')')
-        Calib = evalin('base', 'Calib');
-    else
-        Calib = Calibration();
-    end
+    Calib = Calibration();
 end
 
-% Pfad zur materials.csv
 this_dir = fileparts(mfilename('fullpath'));
-csv_path = fullfile(this_dir, 'materials.csv');
+project_root = fileparts(this_dir);
+csv_path = fullfile(project_root, '02_Data', 'materials.csv');
 
 calc_energy = true;
 if isfield(Scenario, 'calc_energy')
     calc_energy = Scenario.calc_energy;
 end
 
-% 1. Faktor für Lagenaufbaudicke aus Calib
+% Kompaktierungsfaktor
 t_factor = 1.0;
 if isfield(Calib, 'thickness_factor')
     t_factor = Calib.thickness_factor;
@@ -37,7 +28,7 @@ elseif isfield(Scenario, 't_factor')
     t_factor = Scenario.t_factor;
 end
 
-% 2. Faktor für Fasergehalt aus Calib
+% Faservolumenanteil-Faktor
 vf_factor = 1.0;
 if isfield(Calib, 'fiber_volume_factor')
     vf_factor = Calib.fiber_volume_factor;
@@ -47,13 +38,18 @@ elseif isfield(Calib, 'fasergehalt')
     vf_factor = Calib.fasergehalt;
 end
 
-% 3. Nenn-Bruchdehnung der Deckhaut aus Calib
-failure_strain = 0.00262;
+% Bruchdehnung der Deckhaut (optional)
+failure_strain = [];
 if isfield(Calib, 'failure_strain') && ~isempty(Calib.failure_strain)
     failure_strain = Calib.failure_strain;
 end
 
-% KLT-Berechnung der Deckhäute (mit t_factor, vf_factor und failure_strain, KEIN E_factor!)
+use_lpf = false;
+if isfield(Calib, 'use_lpf') && ~isempty(Calib.use_lpf)
+    use_lpf = Calib.use_lpf;
+end
+
+% KLT-Berechnung der Deckhäute
 if ~isfield(Scenario, 'layup') || isempty(Scenario.layup)
     cfk_props.E_top = 80000;
     cfk_props.t_top = 1.0;
@@ -63,19 +59,17 @@ if ~isfield(Scenario, 'layup') || isempty(Scenario.layup)
     cfk_props.core_t = 18;
     cfk_props.core_dir = '';
 else
-    cfk_props = calc_cfk_properties(Scenario.layup, csv_path, calc_energy, t_factor, vf_factor, failure_strain);
+    cfk_props = calc_cfk_properties(Scenario.layup, csv_path, calc_energy, t_factor, vf_factor, failure_strain, use_lpf);
 end
 
 Mdata = struct();
-Mdata.cfk.E_top      = cfk_props.E_top;    % MPa (rein aus KLT, kein E-Modul Faktor!)
-Mdata.cfk.t_top      = cfk_props.t_top;    % mm
-Mdata.cfk.E_lower    = cfk_props.E_lower;  % MPa (rein aus KLT, kein E-Modul Faktor!)
-Mdata.cfk.t_lower    = cfk_props.t_lower;  % mm
-Mdata.cfk.UTS        = cfk_props.UTS;      % MPa
+Mdata.cfk.E_top      = cfk_props.E_top;
+Mdata.cfk.t_top      = cfk_props.t_top;
+Mdata.cfk.E_lower    = cfk_props.E_lower;
+Mdata.cfk.t_lower    = cfk_props.t_lower;
+Mdata.cfk.UTS        = cfk_props.UTS;
 
-%% Core Data (Plascore PAMG-XR1-4.5-1/8-10-N-5056)
-% Orientierung: 'L' (Ribbon / Längs, G=550 MPa, tau=2.97 MPa)
-%               'W' (Transverse / Quer, G=230 MPa, tau=2.03 MPa)
+% Kerneigenschaften (Plascore PAMG-XR1-5056)
 core_dir = 'L';
 if isfield(Calib, 'core_dir') && ~isempty(Calib.core_dir)
     core_dir = upper(Calib.core_dir);
@@ -87,38 +81,36 @@ if isfield(cfk_props, 'core_dir') && ~isempty(cfk_props.core_dir)
 end
 
 if startsWith(core_dir, 'W')
-    Mdata.core.G       = 230;      % MPa (W-Richtung)
-    Mdata.core.tau_max = 2.03;     % MPa
+    Mdata.core.G       = 230;   % MPa (W-Richtung)
+    Mdata.core.tau_max = 2.03;  % MPa
     Mdata.core.dir     = 'W';
 else
-    Mdata.core.G       = 550;      % MPa (L-Richtung)
-    Mdata.core.tau_max = 2.97;     % MPa
+    Mdata.core.G       = 550;   % MPa (L-Richtung)
+    Mdata.core.tau_max = 2.97;  % MPa
     Mdata.core.dir     = 'L';
 end
 
 if isfield(cfk_props, 'core_t') && ~isempty(cfk_props.core_t) && ~isnan(cfk_props.core_t)
-    Mdata.core.t     = cfk_props.core_t;
+    Mdata.core.t = cfk_props.core_t;
 elseif isfield(Scenario, 'core_t')
-    Mdata.core.t     = Scenario.core_t;
+    Mdata.core.t = Scenario.core_t;
 else
-    Mdata.core.t     = 18;       % mm Default
+    Mdata.core.t = 18;
 end
 
-%% Festigkeiten (Failure Limits)
+% Bruchlast- & Modellparameter
 if isfield(Calib, 'post_fail_factor')
     Mdata.post_fail_factor = Calib.post_fail_factor;
 else
     Mdata.post_fail_factor = 0.262;
 end
 
-% Gradienten-Korrekturfaktor aus Calib
 if isfield(Calib, 'gradient_factor')
     Mdata.gradient_factor = Calib.gradient_factor;
 else
     Mdata.gradient_factor = 1.0;
 end
 
-% Bruchdehnung & Energieparameter aus Calib
 Mdata.failure_strain = failure_strain;
 
 if isfield(Calib, 'softening_factor') && ~isempty(Calib.softening_factor)
@@ -137,11 +129,6 @@ if isfield(Calib, 'energy_mode') && ~isempty(Calib.energy_mode)
     Mdata.energy_mode = Calib.energy_mode;
 else
     Mdata.energy_mode = 'to_peak';
-end
-
-% Falls ohne Ausgabeargument aufgerufen, in Base Workspace schreiben
-if nargout == 0
-    assignin('base', 'Mdata', Mdata);
 end
 
 end
