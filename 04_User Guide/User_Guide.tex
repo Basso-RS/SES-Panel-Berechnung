@@ -1,0 +1,185 @@
+\documentclass[12pt,oneside]{report}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[ngerman]{babel}
+\usepackage[sc]{mathpazo}		% Palatino für Haupttext und Mathematik
+\usepackage{helvet}
+\usepackage{microtype}
+\usepackage{parskip}			% Absätze mit Abstand statt Einrückung
+
+\usepackage[a4paper,
+	    left=2.5cm,
+	    right=2.5cm,
+	    top=1.5cm,
+	    bottom=1.5cm,
+	    marginparsep=5mm,
+	    marginparwidth=10mm,
+	    headheight=7mm,
+	    headsep=1.2cm,
+	    footskip=1.5cm,
+	    includeheadfoot]{geometry}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+
+% Farbdefinitionen für Links und Warnhinweise
+\definecolor{linknavy}{RGB}{0, 60, 130}
+
+% Box-Farben für Warnhinweise
+\definecolor{warnred}{RGB}{180, 40, 40}
+\definecolor{warnbg}{RGB}{253, 242, 242}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Code Listings %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{listings}
+
+% VS Code Light Farben (wie in master.tex)
+\definecolor{vscBackground}{HTML}{FFFFFF}
+\definecolor{vscText}{HTML}{000000}
+\definecolor{vscKeyword}{HTML}{0000FF}
+\definecolor{vscString}{HTML}{A31515}
+\definecolor{vscComment}{HTML}{008000}
+\definecolor{vscNumber}{HTML}{098658}
+\definecolor{vscLineNumber}{HTML}{237893}
+
+\lstdefinestyle{vscodeLightMatlab}{
+    language=Matlab,
+    backgroundcolor=\color{vscBackground},
+    basicstyle=\ttfamily\footnotesize\color{vscText},
+    keywordstyle=\color{vscKeyword},
+    stringstyle=\color{vscString},
+    commentstyle=\color{vscComment},
+    numberstyle=\tiny\color{vscLineNumber},
+    numbers=left,
+    numbersep=8pt,
+    breaklines=true,
+    breakatwhitespace=false,
+    keepspaces=true,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=4,
+    captionpos=b,
+    literate=
+        {ä}{{\"a}}1
+        {ö}{{\"o}}1
+        {ü}{{\"u}}1
+        {Ä}{{\"A}}1
+        {Ö}{{\"O}}1
+        {Ü}{{\"U}}1
+        {ß}{{\ss}}1
+}
+
+\lstset{style=vscodeLightMatlab}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newcommand{\DocVersion}{1.0}
+
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\setlength{\headwidth}{\textwidth}
+\fancyfoot[R]{\thepage}
+\fancyfoot[L]{\leftmark}
+\fancyhead[R]{SES Panel Suite -- User Guide v\DocVersion}
+\fancyhead[L]{Formula Student SES}
+\renewcommand{\chaptermark}[1]{\markboth{Kapitel \thechapter. #1}{}}
+\renewcommand{\headrulewidth}{0.5pt}
+\renewcommand{\footrulewidth}{0.5pt}
+
+\fancypagestyle{plain}{
+  \fancyhf{}
+  \fancyfoot[R]{\thepage}
+  \fancyfoot[L]{\leftmark}
+  \fancyhead[R]{SES Panel Suite -- User Guide v\DocVersion}
+  \fancyhead[L]{Formula Student SES}
+  \renewcommand{\headrulewidth}{0.5pt}
+  \renewcommand{\footrulewidth}{0.5pt}
+}
+
+\usepackage[bookmarks, raiselinks, pageanchor,
+            hyperindex, colorlinks,
+            citecolor=black, linkcolor=black,
+            urlcolor=blue!70!black, filecolor=black,
+            menucolor=black]{hyperref}
+
+\hypersetup{
+    pdftitle={SES Panel Calculation and Optimization Suite -- User Guide v1.0},
+    pdfauthor={Formula Student Team -- Chassis and SES Department},
+    pdfsubject={User Guide: SES Sandwich-Panel-Berechnung},
+    pdfkeywords={Formula Student, SES, CFK, Sandwich, Wabe, 3-Punkt-Biegung, Optimierung}
+}
+
+% Makros für Verlinkungen auf das Abkürzungsverzeichnis (\label{abk:...})
+\newcommand{\abk}[1]{\hyperref[abk:#1]{#1}}
+\newcommand{\abklink}[2]{\hyperref[abk:#1]{#2}}
+
+\begin{document}
+  \hypersetup{pageanchor=false}
+
+  % ---------------------------------------------------------------------------------
+  % Titelseite
+  % ---------------------------------------------------------------------------------
+  \begin{titlepage}
+    \thispagestyle{empty}
+    \vspace*{0.8cm}
+    \begin{center}
+      {\LARGE \textbf{Formula Student Monocoque SES Auslegung}}\\[3.2cm]
+    
+      {\huge \textbf{USER GUIDE}}\\[0.5cm]
+      {\Large \textbf{Version \DocVersion}}\\[2.2cm]
+      {\Large \textbf{MATLAB Skript}}\\[2.2cm]
+      {\large Leitfaden für die Nutzung des Matlabskriptes zur Berechnung \par und Optimierung von SES-Panels}\\[1.8cm]
+
+      {\large Saison 2026 / 2027}\\[1.5cm]
+
+      \textbf{Baugruppe Frame \& Body}\\[0.4cm]
+      Laurin Basso\\[1.5cm]
+
+      \vfill
+      {\small Dokumentenversion \DocVersion \quad|\quad Stand: 2026}
+    \end{center}
+  \end{titlepage}
+  \clearpage
+
+  % ---------------------------------------------------------------------------------
+  % Inhaltsverzeichnis (LaTeX-generiert mit Seitenzahlen)
+  % ---------------------------------------------------------------------------------
+  \hypersetup{pageanchor=true}
+  \pagenumbering{roman}
+  \tableofcontents
+  \clearpage
+
+  % ---------------------------------------------------------------------------------
+  % Tabellenverzeichnis (automatisch generiert & verlinkt)
+  % ---------------------------------------------------------------------------------
+  \phantomsection
+  \addcontentsline{toc}{chapter}{\listtablename}
+  \listoftables
+  \clearpage
+
+  % ---------------------------------------------------------------------------------
+  % Abkürzungsverzeichnis (strukturiert & verlinkt)
+  % ---------------------------------------------------------------------------------
+  \phantomsection
+  \addcontentsline{toc}{chapter}{Abkürzungsverzeichnis}
+  \input{chapters/00_abkuerzungen.tex}
+  \clearpage
+
+  % ---------------------------------------------------------------------------------
+  % Hauptteil (Arabische Seitennummerierung)
+  % ---------------------------------------------------------------------------------
+  \pagenumbering{arabic}
+
+  \input{chapters/01_erste_schritte_quickstart.tex}
+  \input{chapters/02_eingaben_konfiguration.tex}
+  \input{chapters/03_haupt_workflows.tex}
+  \input{chapters/04_troubleshooting_faq.tex}
+  \input{chapters/05_sonderfunktionen_advanced.tex}
+  \input{chapters/06_referenz_materialien.tex}
+
+  \end{document}

@@ -1,0 +1,11 @@
+- 27er Panels lagendicke kann so nicht stimmen, Kern Thema X 
+
+- Kernrichtung X
+
+- einheitliche kurz Namen in der Lagenaufbaubeschreibung X
+
+- Optimierung Excel: Energy Berechnung falsch, Gradient falsch evtl. noch mehr ? Auch in den Makros falsch! X
+ 
+- allgemein deutlich bessere Dokumentation benötigt, mehr messdata z.b. gesammtdicke Panel und layer dicken X
+
+- Compliance: bei 89,6% --> 26_16 ca. 18% Steifigkeit Verlust, weil der Weg länger wird aber die Kraft gleich bleibt ! Pro 1% mehr Compliance ca 1,5 % mehr Steifigkeit !!!!!!!!!!!!! X 

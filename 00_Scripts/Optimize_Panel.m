@@ -8,11 +8,9 @@ project_root = fileparts(this_dir);
 addpath(fullfile(project_root, '00_Scripts'), fullfile(project_root, '01_Functions'), fullfile(project_root, '02_Data'));
 
 %% Konfiguration
-SafetyFactor = 1.0;
-
-% Zielwerte (Targets)
+% Zielwerte & Sicherheitsfaktor (Targets)
 Targets = struct();
-Targets.safety_factor = SafetyFactor;
+Targets.safety_factor = 1.0;    % Sicherheitsfaktor auf Zielwerte (z.B. 1.0 = keine Reserve, 1.1 = +10%)
 Targets.Gradient      = 3000;   % Mindest-Gradient [N/mm]
 Targets.Energy        = 60;     % Mindest-Energieaufnahme [J]
 Targets.EI            = 0;      % Mindest-Biegesteifigkeit [N*mm^2]
@@ -28,7 +26,7 @@ OptSettings.max_plies              = 8;           % Maximalanzahl Lagen
 OptSettings.angle_mode             = 'simple';    % 'simple' ([0, +/-21, 45]) oder 'advanced'
 OptSettings.material_pool          = 'all';       % 'all' oder 'standard'
 OptSettings.sichtlage_active       = true;        % Sichtlage aktiv
-OptSettings.sichtlage_material     = {'t7', 'f'}; % Erlaubte Sichtlagen-Materialien
+OptSettings.sichtlage_material     = {'t7'}; % Erlaubte Sichtlagen-Materialien
 OptSettings.sichtlage_angle        = 45;          % Winkel der Sichtlage [Grad]
 OptSettings.core_interface_fabric  = true;        % Gewebelage am Kern
 OptSettings.plot_curve             = true;        % Vergleichsplot erzeugen
@@ -79,7 +77,7 @@ if OptSettings.plot_curve && ~isempty(Best) && isfield(Best, 'Curve')
         xlabel('Durchbiegung w [mm]', 'FontSize', 11, 'FontWeight', 'bold');
         ylabel('Kraft F [kN]', 'FontSize', 11, 'FontWeight', 'bold');
         title(sprintf('Laminat-Optimierung (SF = %.2f): Gewichtsersparnis -%.1f %% (-%.1f g)', ...
-            SafetyFactor, Best.weight_saving_pct, Best.weight_saving_g), 'FontSize', 13, 'FontWeight', 'bold');
+            Targets.safety_factor, Best.weight_saving_pct, Best.weight_saving_g), 'FontSize', 13, 'FontWeight', 'bold');
         legend('Location', 'best', 'FontSize', 10);
         xlim([0, max(12.7, max(Baseline.w_max, Best.w_max) + 1)]);
         ylim([0, max(Baseline.F_max, Best.F_max) / 1000 * 1.15]);

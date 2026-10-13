@@ -1,0 +1,121 @@
+\chapter{Sonderfunktionen \& Fortgeschrittene Workflows} \label{ch:advanced}
+
+Dieses Kapitel behandelt erweiterte Werkzeuge zur empirischen Modellvalidierung, den kontinuierlichen Datenabgleich mit Prüfstandsversuchen sowie fundamentale Fertigungsrichtlinien für den physischen Bau von SES-Testpanels.
+
+\section{Benchmark-Suite zur Modellvalidierung} \label{sec:benchmark}
+
+Das Skript \texttt{Benchmark\_Panels.m} (bzw. die Kernfunktion \texttt{run\_benchmark.m}) dient der kontinuierlichen Überprüfung der Modellgüte. Es führt einen vollautomatisierten Abgleich zwischen den theoretischen Simulationsergebnissen und den realen Messwerten aller gefertigten Formula-Student-Panels durch.
+
+\subsection*{Architektur \& Live-Rohdatenauswertung}
+Im Gegensatz zu statischen Tabellenwerten arbeitet die Benchmark-Suite direkt auf den realen Prüfmaschinen-Messdaten:
+\begin{itemize}
+    \item \textbf{Single Source of Truth}: Sämtliche Panel-Definitionen und Kraft-Weg-Messkurven werden zentral in der Datei \texttt{02\_Data/\allowbreak Pruefstand\_Rohdaten\_Benchmark.xlsx} gepflegt.
+    \item \textbf{Automatisierte Messkurven-Analyse}: Die Funktion \texttt{evaluate\_test\_curve.m} liest die Rohdaten (\texttt{Traversenweg\_mm} und \texttt{Kraft\_N}) für jedes Panel ein. Sie bereinigt Vorlast- und Setzeffekte automatisch, ermittelt die Maximalkraft $F_{\max}$, berechnet über eine lineare Regression (im Bereich $15\,\%$ bis $45\,\% \, F_{\max}$) den realen Steifigkeitsgradienten und integriert die absorbierte Energie exakt bis zum \abk{SES}-Normstempelweg von $12{,}70\,\text{mm}$.
+    \item \textbf{Identische Berechnungskette}: Für jedes Panel ruft das Benchmark-Tool exakt die modulare Standard-Simulationskette des Projekts auf (\texttt{Scenariodata}, \allowbreak \texttt{Calibration}, \allowbreak \texttt{Materialdata}, \allowbreak \texttt{EI\_calc}, \allowbreak \texttt{Shearstiff\_calc}, \allowbreak \texttt{Deflection}, \allowbreak \texttt{Energy\_calc}). Es finden keinerlei isolierte Sonderberechnungen statt.
+    \item \textbf{Duale Deckhautdicken-Erfassung für asymmetrische Panels}: Um asymmetrische Monocoque-Panels (z.\,B. unterschiedliche Lagendicken auf Druck- und Zugseite gemäß \abk{FSG} T 3.5.4) exakt abzugleichen, erfasst der Benchmark getrennte Messwerte für Obergurt und Untergurt (\texttt{Deckhautdicke\_oben\_mm} und \texttt{Deckhautdicke\_unten\_mm}). Die Suite vergleicht beide Seiten individuell mit der Laminattheorie und schaltet die Tabellenausgabe bei asymmetrischen Aufbauten automatisch in die getrennte Darstellung \texttt{oben / unten}.
+\end{itemize}
+
+\subsection*{Aktiver Datenbestand (28 Panels)}
+Der Benchmark filtert und validiert aktuell 28 aussagekräftige Fertigungspanels aus drei Saisons:
+\begin{itemize}
+    \item \textbf{Saison 2024 (17 Panels)}: Fertigungspanels \texttt{24\_02} bis \texttt{24\_18} (ohne die irregulären Proben \texttt{24\_19} und \texttt{24\_20}).
+    \item \textbf{Saison 2026 (7 Panels)}: Aktuelle Monocoque-Panels \texttt{26\_12} bis \texttt{26\_21} (unter Ausschluss von Frühausfällen durch Fertigungsfehler wie Delamination bei \texttt{26\_17} und Sonderwerkstoffen bei \texttt{26\_19}).
+    \item \textbf{Saison 2027 (4 Panels)}: Neueste Prüfpanels \texttt{27\_01} bis \texttt{27\_04} inklusive der Panels mit $20\,\text{mm}$ Wabenkern.
+\end{itemize}
+
+\subsection*{Prioritäre Zielgrößen \& Korrelationsgüte}
+Für das \abk{SES} sind zwei Kennwerte von überragender Bedeutung:
+\begin{enumerate}
+    \item \textbf{Steifigkeitsgradient ($\text{Gradient}$ in $\text{N/mm}$)}: Maßgeblich für die Einhaltung der Mindeststeifigkeit des Cockpits und der Seitenwände.
+    \item \textbf{Energieaufnahme ($\text{Energy}$ in $\text{J}$)}: Maßgeblich für den Nachweis der Crash- und Verformungsenergie bis $12{,}7\,\text{mm}$.
+\end{enumerate}
+Zusätzlich dient der Dickenabgleich der Fertigungskontrolle: Bei symmetrischen Aufbauten erfolgt der Vergleich kompakt einzeilig ($t_{\text{test}}$ vs. $t_{\text{calc}}$), während bei asymmetrischen Panels beide Deckhäute getrennt als $t_{\text{top}}/t_{\text{bot}}$ mit individuellen prozentualen Abweichungen ausgewiesen werden (z.\,B. \texttt{0.65/0.65} vs. \texttt{0.84/0.64\,mm}). Die Benchmark-Statistik dokumentiert dies als \texttt{MAE Dicke (o/u)}.
+
+Dank der Reihenschaltung von Plattenbiegung, Wabenkern-Schubverzerrung nach \abk{ASTM} C393 und der Prüfstands-Compliance ($K_{\text{rig}} = 22\,218\,\text{N/mm}$ aus dem SES Baseline Steel Tube Test T3.2) sank die mittlere absolute Abweichung (MAE) über alle 28 Panels auf ca. $12{,}7\,\%$ für den Gradienten und unter $10\,\%$ bei den aktuellen Monocoque-Panels der Saison 2026.
+
+Nach jedem Gesamtlauf erzeugt das Skript automatisch einen druckfertigen DIN-A4-Prüfbericht im \abk{PDF}-Format im Ordner \textbf{\texttt{Downloads}}:
+\begin{quote}
+    \texttt{SES\_Report\_Benchmark\_Validation\_<Zeitstempel>.pdf}
+\end{quote}
+
+\section{Messdaten-Abgleich \& Continuous Improvement} \label{sec:continuous_improvement}
+
+Das Berechnungsmodell ist kein statisches Tool, sondern ein lernendes System, das kontinuierlich an realen Biegeversuchen geschärft wird.
+
+\begin{tcolorbox}[colback=warnbg,colframe=warnred,arc=2mm,title=\textbf{Wichtiger Leitsatz: Pflicht zur lückenlosen Panel-Aufnahme}]
+\textbf{Jedes neu gefertigte und im 3-Punkt-Biegeversuch geprüfte SES-Panel MUSS zwingend in die Benchmark-Datenbasis aufgenommen werden!} \par \vspace{0.5em}
+\end{tcolorbox}
+
+\subsection*{Workflow: Neues Prüfpanel in 4 Schritten einpflegen}
+Sobald ein Prüfkörper auf der Universalprüfmaschine getestet und die Kraft-Weg-Messreihe exportiert wurde, erfolgt die Aufnahme in vier standardisierten Schritten:
+
+\begin{enumerate}
+    \item \textbf{Panel-Stammdaten eintragen}: \par
+    Öffne die Excel-Datei \texttt{02\_Data/\allowbreak Pruefstand\_Rohdaten\_Benchmark.xlsx} und navigiere zum ersten Tabellenblatt \texttt{Panels}. Füge am Ende der Tabelle eine neue Zeile mit den Parametern des Prüflings ein:
+    \begin{itemize}
+        \item \texttt{Panel\_ID}: Eindeutiges Saisons-Kürzel (z.\,B. \texttt{27\_05}).
+        \item \texttt{Layup}: Der vollständige, syntaktisch korrekte Lagenaufbaustring (z.\,B. \texttt{45t7/\allowbreak 0m/\allowbreak 0m/\allowbreak 21m/\allowbreak 45t7/\allowbreak cp/\allowbreak 18core/\allowbreak sym}).
+        \item \texttt{Kerndicke\_mm}: Nominale Kernhöhe in $\text{mm}$ (z.\,B. $18$ oder $20$).
+        \item \texttt{Deckhautdicke\_oben\_mm}: Real mit der Mikrometer-Schraube gemessene Dicke der oberen Deckhaut (Druckseite / Stempelkontakt) nach der Heißpressung.
+        \item \texttt{Deckhautdicke\_unten\_mm}: Real gemessene Dicke der unteren Deckhaut (Zugseite / Auflage auf den Stützrollen).
+    \end{itemize}
+    \textit{(Hinweis zu asymmetrischen Panels: Bei asymmetrischen Lagenaufbauten müssen beide Deckhäute getrennt gemessen und eingetragen werden. Bei symmetrischen Laminaten sind beide Werte identisch).}
+
+    \item \textbf{Rohdaten-Tabellenblatt anlegen}: \par
+    Erstelle in derselben Arbeitsmappe ein neues Tabellenblatt, dessen Name exakt der \texttt{Panel\_ID} entspricht (z.\,B. Blattname \texttt{27\_05}). \\
+    Füge die unformatierten Messwerte der Prüfmaschine spaltenweise ein:
+    \begin{itemize}
+        \item Spalte A (\texttt{Traversenweg\_mm}): Stempelweg bzw. Durchbiegung $w$ in $\text{mm}$.
+        \item Spalte B (\texttt{Kraft\_N}): Gemessene Prüfkraft $F$ in $\text{N}$.
+        \item \textit{(Optional Spalte C \texttt{Zeit\_s}: Zeitstempel der Messung).}
+    \end{itemize}
+
+    \item \textbf{Benchmark mit Neuladen ausführen}: \par
+    Starte den Benchmark in MATLAB mit erzwungenem Cache-Reload, um die neuen Excel-Daten einzulesen:
+    \begin{lstlisting}[style=vscodeLightMatlab]
+    % Im MATLAB Command Window:
+    run_benchmark('reload');
+    % Oder alternativ ueber das Gesamtskript:
+    Benchmark_Panels;
+    \end{lstlisting}
+
+    \item \textbf{Ergebnisse prüfen \& Modell abgleichen}: \par
+    Im Terminal-Report und im generierten \abk{PDF}-Bericht die relative Abweichung für Gradient und Energie prüfen:
+    \begin{itemize}
+        \item \textbf{Normalbereich ($\le 10\,\%$ Abweichung)}: Auslegung und Fertigungsqualität sind bestätigt.
+        \item \textbf{Signifikante Abweichung ($> 15\,\%$)}: Prüfen, ob ein unerwarteter Versagensmodus vorlag (z.\,B. Schälung der Deckhaut durch fehlenden Klebefilm \abk{CP} oder Quereinbau des Wabenkerns \abk{W}). Bei systematischen Abweichungen über mehrere Proben können die Fertigungskorrekturfaktoren in \texttt{01\_Functions/Calibration.m} nachjustiert werden.
+    \end{itemize}
+\end{enumerate}
+
+\section{Fertigungsrichtlinien für den Panelbau} \label{sec:fertigungsrichtlinien}
+
+Aus den Benchmark-Ergebnissen und Schadensanalysen realer Prüfstandstests leiten sich fundamentale Richtlinien für den Panelbau ab:
+
+\begin{itemize}
+    \item \textbf{Beidseitiger Klebefilm (\hyperref[abk:CP]{\texttt{cp}})}: \par
+    Zwischen Wabenkern und CFK-Deckhaut muss zwingend auf beiden Seiten eine Schicht Epoxidharz-Klebefilm ($\approx 150\,\text{g/m}^2$) eingebracht werden. Ein Weglassen oder unzureichender Anpressdruck führt zu vorzeitiger Deckhaut-Delamination bei Bruchteilen der Auslegungslast.
+
+    \item \textbf{Gewebelage als Kernanbindung}: \par
+    Direkt auf den Klebefilm sollte immer mindestens eine Gewebelage (z.\,B. \texttt{45t7} oder \texttt{45f}) gelegt werden. Reine $0^\circ$-UD-Lagen am Kern neigen unter Querkraft zu Schälbeanspruchungen und lokaler Faserabplatzung an den Wabenstegen.
+
+    \item \textbf{Heißpress-Aushärtung}: \par
+    Um den im Berechnungsmodell hinterlegten Kompaktierungsfaktor von $0{,}95$ zu erreichen, müssen die Panels in einer Heißpresse unter definiertem Druck ($\approx 6\,\text{bar}$) gehärtet werden. Eine reine Vakuuminfusion oder Vakuumsackhärtung im Ofen erreicht nicht die erforderliche Faservolumenfraktion und führt zu weicheren Deckhäuten.
+
+    \item \textbf{Wabenkern-Orientierung einhalten}: \par
+    Vor dem Zuschnitt ist die Ribbon-Richtung (\hyperref[abk:L]{\texttt{'L'}}) der Wabenblöcke eindeutig zu markieren und parallel zur Prüf- bzw. Hauptlastrichtung einzubauen. Ein versehentlicher Quereinbau (\hyperref[abk:W]{\texttt{'W'}}) reduziert den Kernschubmodul von $550\,\text{MPa}$ auf $230\,\text{MPa}$ und halbiert die Schubtragfähigkeit.
+\end{itemize}
+
+\section{Einfluss der Kerndicke \& Parameterstudien} \label{sec:kerndicke}
+
+Die Biegesteifigkeit (\hyperref[abk:EI]{$EI$}) eines Sandwich-Panels wird primär durch den Abstand der Deckhäute bestimmt (Steiner-Anteil):
+\begin{equation}
+    (EI)_{\text{equiv}} \approx E_{\text{skin}} \cdot b \cdot t_{\text{skin}} \cdot \frac{d^2}{2}
+\end{equation}
+wobei $d = t_{\text{core}} + t_{\text{skin}}$ den Hebelarm der Deckhautmitten darstellt.
+
+\subsection*{Kerndicken im direkten Vergleich}
+\begin{itemize}
+    \item \textbf{10\,mm Kern}: Sehr kompakter Aufbau für enge Bauraumbereiche. Wegen des geringen Abstands treten jedoch sehr hohe Kernschubspannungen auf ($\tau_{\text{core}} > 2{,}4\,\text{MPa}$). Bei geringen Lagenzahlen dominiert Kernschubbruch als primärer Versagensmodus.
+    \item \textbf{18\,mm Kern}: Der bewährte Standard mit optimaler Balance aus Bauraumbedarf, Beulsteifigkeit und Kernschubreserve.
+    \item \textbf{20\,mm Kern}: Durch die Erhöhung von $18$ auf $20\,\text{mm}$ wächst der Hebelarm $d$ um über $11\,\%$. Dadurch kann die Deckhautdicke bei gleichem Biegegradienten signifikant reduziert werden.
+\end{itemize}

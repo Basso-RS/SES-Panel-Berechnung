@@ -6,20 +6,28 @@ function [Results, Curve] = Deflection(Results, Scenario, Mdata)
     % Biegungsanteil nach SES (Euler-Bernoulli Dreipunktbiegung)
     nenner = Scenario.panel.l^3 / (48 * Results.EI);
 
-    % Kernschubanteil (falls aktiviert)
-    if isfield(Scenario, 'include_core_shear') && Scenario.include_core_shear
+    % Kernschubanteil nach Timoshenko (falls aktiviert)
+    inc_shear = false;
+    if isfield(Mdata, 'include_core_shear') && Mdata.include_core_shear
+        inc_shear = true;
+    elseif isfield(Scenario, 'include_core_shear') && Scenario.include_core_shear
+        inc_shear = true;
+    end
+    if inc_shear
         if ~isfield(Results, 'S') || isempty(Results.S) || Results.S == 0
             Results = Shearstiff_calc(Results, Mdata, Scenario);
         end
         nenner = nenner + Scenario.panel.l / (4 * Results.S);
     end
 
-    % Gradient (Gesamtsteifigkeit) [N/mm]
-    grad_factor = 1.0;
-    if isfield(Mdata, 'gradient_factor') && ~isempty(Mdata.gradient_factor)
-        grad_factor = Mdata.gradient_factor;
+    % Prüfstands- und Vorrichtungs-Compliance (falls kalibriert)
+    if isfield(Mdata, 'fixture_stiffness') && ~isempty(Mdata.fixture_stiffness) && ...
+       isfinite(Mdata.fixture_stiffness) && Mdata.fixture_stiffness > 0
+        nenner = nenner + 1 / Mdata.fixture_stiffness;
     end
-    Results.Gradient = (1 / nenner) * grad_factor;
+
+    % Gradient (Gesamtsteifigkeit) [N/mm]
+    Results.Gradient = 1 / nenner;
 
     % 1. Versagensmoden berechnen
     % A. Deckhaut-Bruchspannung (Biegemoment M = F * L / 4)

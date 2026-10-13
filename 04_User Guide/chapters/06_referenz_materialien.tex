@@ -1,0 +1,60 @@
+\chapter{Referenz: Materialkatalog \& \texorpdfstring{\abk{FSG}}{FSG}-Regeln} \label{ch:materials}
+
+Dieses Kapitel dokumentiert alle in der zentralen Materialdatenbank (\hyperref[abk:CSV]{\texttt{materials.csv}}) hinterlegten Werkstoffe, deren Kennwerte und anerkannte Syntax-Aliase sowie die maßgeblichen Laminat-Regeln nach dem Formula-Student-Regelwerk.
+
+\section{Material-Datenbank \& Kennwerte} \label{sec:materials_db}
+
+Alle Materialkarten werden über die Datei \texttt{02\_Data/materials.csv} als Single Source of Truth verwaltet. Die Werte entsprechen den mechanischen Eigenschaften nach der Aushärtung im Heißpressverfahren ($\approx 6\,\text{bar}$):
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{lllrrrrl}
+\toprule
+\textbf{Token} & \textbf{Bezeichnung} & \textbf{Typ} & \boldmath$E_1$ & \boldmath$X_t$ & \boldmath$t_{\text{ply}}$ & \boldmath$\rho$ & \textbf{Aliase} \\
+ & & & \scriptsize [GPa] & \scriptsize [MPa] & \scriptsize [mm] & \scriptsize [$\text{g/cm}^3$] & \\
+\midrule
+\texttt{f}  & M40J Fabric     & \abk{CFK}-Gewebe   & $86{,}8$  & $864$  & $0{,}23$ & $1{,}49$ & \texttt{fm40j}, \texttt{m40jf}, \texttt{mf} \\
+\texttt{m}  & M40J UD         & \abk{CFK}-\abk{UD}       & $175{,}6$ & $2273$ & $0{,}21$ & $1{,}52$ & \texttt{ud}, \texttt{m40jud} \\
+\texttt{t7} & T700 Fabric     & \abk{CFK}-Gewebe   & $58{,}2$  & $1120$ & $0{,}31$ & $1{,}51$ & \texttt{t}, \texttt{t700}, \texttt{ft} \\
+\texttt{t8} & T800S UD        & \abk{CFK}-\abk{UD}       & $155{,}7$ & $3344$ & $0{,}15$ & $1{,}54$ & \texttt{t800}, \texttt{t800s}, \texttt{u8} \\
+\texttt{z}  & ZZ300T          & Zylon-Gewebe & $51{,}9$  & $988$  & $0{,}38$ & $0{,}78$ & \texttt{zz300t} \\
+\texttt{a}  & SIGAPREG A W173 & Aramid-Gewebe& $26{,}0$  & $590$  & $0{,}23$ & $1{,}33$ & \texttt{aramid}, \texttt{kevlar} \\
+\texttt{cp} & Coupling Film   & Klebefilm (\abk{CP})    & --        & --     & $0{,}15$ & $1{,}00$ & \texttt{cp} \\
+\texttt{core}& Aluminium 5056 & Wabenkern    & --        & --     & $18{,}0$ & $0{,}075$& \texttt{core}, \texttt{corew} \\
+\bottomrule
+\end{tabular}
+\caption{Übersicht der hinterlegten Werkstoffdaten in \texttt{materials.csv}.}
+\label{tab:material_database}
+\end{table}
+
+\subsection*{Einsatzzwecke der Kernmaterialien}
+\begin{itemize}
+    \item \textbf{M40J \abk{UD} (\texttt{m})}: \abklink{HM}{Hochmodulfaser} für maximale Längssteifigkeit ($E_1 = 175{,}6\,\text{GPa}$). Bildet das Rückgrat für hohe Biegegradienten bei minimaler Lagenzahl.
+    \item \textbf{T700 Fabric (\texttt{t7})}: Hochfestes Standardgewebe ($X_t = 1120\,\text{MPa}$). Durch die hohe Dehnfähigkeit ideal als robuste, schlagfeste Sichtlage gemäß \abk{FSG}-Reglement.
+    \item \textbf{T800S \abk{UD} (\texttt{t8})}: \abklink{IM}{Intermediat-Modul-Faser} mit extremer Zugfestigkeit ($X_t = 3344\,\text{MPa}$). Eignet sich besonders für zugbeanspruchte Unterseiten zur Verhinderung vorzeitigen Faserbruchs.
+    \item \textbf{M40J Fabric (\texttt{f})}: \abklink{HM}{Hochmodul}-Gewebe ($E_1 = 86{,}8\,\text{GPa}$). Verbindet hohe Steifigkeit mit Gewebestruktur; optimal als Anbindelage am Kern.
+    \item \textbf{Zylon ZZ300T (\texttt{z})}: \abk{PBO}-Faser mit extremer Bruchzähigkeit und Energieaufnahme für Crash- und Splitterschutzzonen.
+    \item \textbf{Klebefilm (\abk{CP})}: Unverzichtbare Epoxidharz-Kopplungsschicht ($\approx 150\,\text{g/m}^2$) zur formschlüssigen Wabenkernanbindung.
+\end{itemize}
+
+\section{Laminat-Regeln nach Formula Student (\texorpdfstring{\abk{FSG}}{FSG} T 3.5)} \label{sec:fsg_rules}
+
+Bei der Auslegung und manuellen Definition von Laminaten müssen folgende Regelwerksgrenzen zwingend eingehalten werden:
+
+\begin{itemize}
+    \item \textbf{Sichtlagen-Regel (\abk{FSG} T\,3.5.7)}: \par
+    Die äußerste Lage jeder Sandwich-Deckhaut muss zwingend einlagiges Gewebe sein (z.\,B. \texttt{45t7} oder \texttt{45f}). Reines \abk{UD}-Gelege an der Außenseite ist nach Regelwerk unzulässig.
+
+    \item \textbf{Parallellagen-Begrenzung (\abk{FSG} T 3.5.3)}: \par
+    Maximal $50\,\%$ der Einzellagen einer Deckhaut dürfen in die gleiche Faserrichtung orientiert sein. Beispielsweise sind bei einem 4-Lagen-Aufbau höchstens zwei $0^\circ$-Lagen erlaubt.
+
+    \item \textbf{Asymmetrie-Regel der Deckhäute (\abk{FSG} T 3.5.4)}: \par
+    Unterscheiden sich die Dicken der oberen und unteren Deckhaut ($t_{\text{top}} \ne t_{\text{lower}}$), darf das Dickenverhältnis nicht beliebig gewählt werden. Die dünnere Deckhaut ($t_{\text{min}}$) muss mindestens $40\,\%$ der Dicke der stärkeren Deckhaut ($t_{\text{max}}$) betragen:
+    \begin{equation}
+        t_{\text{min}} \ge \min(0{,}40 \cdot t_{\text{max}}, \, 1{,}0\,\text{mm})
+    \end{equation}
+    Erreicht die dünnere Deckhaut mindestens $1{,}0\,\text{mm}$ Dicke, ist jedes Dickenverhältnis regelkonform. Beim physischen 3-Punkt-Biegeversuch für den \abk{SES}-Nachweis muss bei asymmetrischen Aufbauten die schwächere Deckhaut auf Zug (Unterseite) getestet werden.
+
+\end{itemize}

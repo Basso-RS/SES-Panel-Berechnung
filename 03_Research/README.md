@@ -9,5 +9,5 @@ Dieser Ordner enthält alle Forschungsberichte, Voruntersuchungen, extrahierte D
 - `Study_LPF_vs_Baseline.m`: Vergleichsstudie zum Last-Ply-Failure (LPF) vs. linear-elastischer Baseline.
 - `overview_extracted.json`: Strukturierter JSON-Dump der Test- und Messdaten aus den Excel-Dateien.
 - `ORIGINAL_REQUEST.md` & `PROJECT.md`: Ursprüngliche Anforderungsspezifikation und Kontext.
-- `temp.ps1` & `test.ps1`: Temporäre Verifikationsskripte.
-- `.agents/`: Interne Workspace-Artefakte der Subagents.
+- `Sitzungsnotizen_2026-10-07.txt`: Relevante Notizen der HE-Sitzung.
+- `Literatur_Auswahl/`: Relevante Fachliteratur, Skripte und Formula-Student-Regeln.

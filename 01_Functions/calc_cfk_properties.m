@@ -1,4 +1,4 @@
-function cfk_props = calc_cfk_properties(layup_str, materials_csv_path, calc_energy, t_factor, vf_factor, failure_strain, use_lpf)
+function cfk_props = calc_cfk_properties(layup_str, materials_csv_path, calc_energy, t_factor, failure_strain, use_lpf)
 % CALC_CFK_PROPERTIES Berechnet KLT-Eigenschaften und Festigkeiten eines Laminats
 %
 % Inputs:
@@ -6,7 +6,6 @@ function cfk_props = calc_cfk_properties(layup_str, materials_csv_path, calc_ene
 %   materials_csv_path : (Optional) Pfad zur materials.csv
 %   calc_energy        : (Optional) Boolean für Festigkeitsberechnung (Standard: true)
 %   t_factor           : (Optional) Skalierung der Lagendicke (Standard: 1.0)
-%   vf_factor          : (Optional) Skalierung des Fasergehalts (Standard: 1.0)
 %   failure_strain     : (Optional) Nenn-Bruchdehnung der Deckhaut
 %   use_lpf            : (Optional) Boolean für Last-Ply-Failure (Standard: false)
 
@@ -21,13 +20,10 @@ end
 if nargin < 4 || isempty(t_factor)
     t_factor = 1.0;
 end
-if nargin < 5 || isempty(vf_factor)
-    vf_factor = 1.0;
-end
-if nargin < 6
+if nargin < 5
     failure_strain = [];
 end
-if nargin < 7 || isempty(use_lpf)
+if nargin < 6 || isempty(use_lpf)
     use_lpf = false;
 end
 
@@ -38,7 +34,7 @@ end
 [top_parts, lower_parts, detected_core_t, detected_core_dir] = parse_layup(layup_str);
 
 % 3. Sublaminate berechnen
-[E_top, t_top, UTS_top] = calc_sublaminate(top_parts, mat_dict, calc_energy, E_core, G_core, t_factor, vf_factor, failure_strain, use_lpf);
+[E_top, t_top, UTS_top] = calc_sublaminate(top_parts, mat_dict, calc_energy, E_core, G_core, t_factor, failure_strain, use_lpf);
 
 % Symmetrie-Bypass: Wenn identisch oder leer, direkt zuweisen
 if isempty(lower_parts) || isequal(top_parts, lower_parts)
@@ -46,7 +42,7 @@ if isempty(lower_parts) || isequal(top_parts, lower_parts)
     t_lower = t_top;
     UTS_lower = UTS_top;
 else
-    [E_lower, t_lower, UTS_lower] = calc_sublaminate(lower_parts, mat_dict, calc_energy, E_core, G_core, t_factor, vf_factor, failure_strain, use_lpf);
+    [E_lower, t_lower, UTS_lower] = calc_sublaminate(lower_parts, mat_dict, calc_energy, E_core, G_core, t_factor, failure_strain, use_lpf);
 end
 
 cfk_props = struct();
@@ -62,18 +58,15 @@ cfk_props.core_dir = detected_core_dir;
 
 end
 
-function [Ex, t_tot, UTS] = calc_sublaminate(parts, mat_dict, calc_energy, E_core, G_core, t_factor, vf_factor, failure_strain, use_lpf)
+function [Ex, t_tot, UTS] = calc_sublaminate(parts, mat_dict, calc_energy, E_core, G_core, t_factor, failure_strain, use_lpf)
 if isempty(parts)
     Ex = 0; t_tot = 0; UTS = NaN;
     return;
 end
-if nargin < 7 || isempty(vf_factor)
-    vf_factor = 1.0;
-end
-if nargin < 8
+if nargin < 7
     failure_strain = [];
 end
-if nargin < 9 || isempty(use_lpf)
+if nargin < 8 || isempty(use_lpf)
     use_lpf = false;
 end
 
@@ -104,10 +97,10 @@ for i = 1:n_plies
     end
     mat = mat_dict.(mat_id);
     
-    Q11 = mat.Q11 * vf_factor;
-    Q22 = mat.Q22 * vf_factor;
-    Q12 = mat.Q12 * vf_factor;
-    Q66 = mat.Q66 * vf_factor;
+    Q11 = mat.Q11;
+    Q22 = mat.Q22;
+    Q12 = mat.Q12;
+    Q66 = mat.Q66;
     
     theta = angle_deg * (pi / 180);
     m = cos(theta); n = sin(theta);
@@ -128,15 +121,15 @@ for i = 1:n_plies
     
     if calc_energy
         angles_all(i) = theta;
-        Q_all(:,:,i) = mat.Q * vf_factor;
+        Q_all(:,:,i) = mat.Q;
         Xc_all(i) = mat.Xc;
         Xt_all(i) = mat.Xt;
         Yc_all(i) = mat.Yc;
         Yt_all(i) = mat.Yt;
         S_all(i)  = mat.S;
-        E1_all(i) = mat.E1 * vf_factor;
-        E2_all(i) = mat.E2 * vf_factor;
-        G12_all(i)= mat.G12 * vf_factor;
+        E1_all(i) = mat.E1;
+        E2_all(i) = mat.E2;
+        G12_all(i)= mat.G12;
         nu12_all(i)= mat.nu12;
     end
 end

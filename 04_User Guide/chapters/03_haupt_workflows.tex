@@ -1,0 +1,93 @@
+\chapter{Die Haupt-Workflows} \label{ch:workflows}
+
+Das Tool bietet zwei primäre Arbeitsabläufe für die Panel-Auslegung: die schnelle Einzelsimulation eines Prüfkörpers und die automatisierte Optimierung zur Gewichtsminimierung unter Einhaltung aller SES- und FSG-Vorgaben.
+
+\section{Workflow 1: Einzelsimulation eines Panels} \label{sec:calc_single_panel}
+
+Dieser Workflow dient der schnellen Berechnung und Überprüfung eines fest definierten Laminataufbaus (z.\,B. zur Überprüfung einer lagenaufbau Idee oder eine Berechnung eines bereits Physisch getesteten Panels).
+
+\subsection*{Ablauf \& Durchführung}
+\begin{enumerate}
+    \item \textbf{Eingaben prüfen}: In der Datei \texttt{01\_Functions/Scenariodata.m} Geometrie und Lagenaufbau festlegen und speichern (siehe Abschnitt \ref{sec:quickstart}).
+    \item \textbf{Skript starten}: Die Datei \texttt{00\_Scripts/Calculate\_Single\_Panel.m} im MATLAB-Editor öffnen und mit \texttt{F5} (oder Klick auf \textbf{Run}) ausführen.
+\end{enumerate}
+
+\subsection*{Auswertung des Terminal-Reports}
+Die Berechnung wird in wenigen Millisekunden abgeschlossen. Im MATLAB Command Window wird ein detaillierter, in fünf Abschnitte gegliederter Prüfbericht ausgegeben:
+
+\begin{itemize}
+    \item \textbf{Geometrie}: Dicken der oberen und unteren Deckhaut, Kerndicke mit Orientierung (Ribbon \texttt{'L'} oder Quer \texttt{'W'}) sowie die Gesamtsandwichdicke.
+    \item \textbf{Gewicht \& Flächenmasse}: Gesamtmasse des $400 \times 275\,\text{mm}$ Prüfkörpers in Gramm, gesamtes Flächengewicht in $\text{g/m}^2$ sowie die prozentualen Massenanteile der CFK-Deckhäute, des Wabenkerns und des Klebefilms (\hyperref[abk:CP]{\texttt{cp}}).
+    \item \textbf{Steifigkeit (Stiffness)}: Elastizitätsmodul der Deckschichten ($E$), äquivalente Biegesteifigkeit (\hyperref[abk:EI]{$EI$}), axiales Flächenträgheitsmoment ($I$) und der maßgebliche SES-Prüfstandsgradient in $\text{N/mm}$.
+    \item \textbf{Festigkeit \& Versagen (Strength \& Failure)}: Deckhaut-Bruchspannung (\hyperref[abk:UTS]{$UTS$}), Maximalkraft ($F_{max}$), Versagensweg bei Maximalkraft ($w_{max}$) sowie der identifizierte primäre Versagensmodus. \par
+    \textit{Wichtiger Hinweis zur Modellgenauigkeit}: Je nach auftretendem Versagensmodus unterscheidet sich die Linearität der Kraft-Weg-Kennlinie maßgeblich, wodurch die berechnete Energieaufnahme mehr oder weniger vertrauenswürdig ist:
+    \begin{itemize}
+        \item \textit{Deckhautbruch (UTS)}: Faserzug- oder Faserdruckversagen der Deckschichten. Durch das überwiegend linear-elastische Verhalten der Fasern bis zum Bruchpunkt weist die Energieberechnung hier die \textbf{höchste Linearität und Vertrauenswürdigkeit} auf.
+        \item \textit{Kernschubbruch (Core Shear)}: Schubversagen der Aluminiumwaben bei hoher Querkraft. Plastische Verformungen der Zellwände vor dem Peak mindern die Linearität, wodurch die berechnete Energie moderaten Streuungen unterliegt.
+        \item \textit{Deckhautknicken (Wrinkling)}: Lokales Stabilitätsversagen (Beulen) der Deckhaut über den Wabenkammern. Dieses plötzliche, geometrisch nichtlineare Versagen reagiert extrem sensibel auf Fertigungseinflüsse, weshalb der Energieberechnung hier \textbf{am wenigsten vertraut} werden kann.
+    \end{itemize}
+    \item \textbf{Energieaufnahme (Energy Absorption)}: Absorbierte Verformungsenergie in Joule ($J$) im gewählten Modus (\texttt{'to\_peak'} für den direkten Excel abgleich oder \texttt{'ses\_total'} für den \hyperref[abk:SES]{SES}-Regelwerksnachweis).
+\end{itemize}
+
+\subsection*{Automatischer PDF-Prüfbericht}
+Das Skript erzeugt automatisch einen DIN-A4-Prüfbericht im \hyperref[abk:PDF]{PDF}-Format und legt diesen mit Zeitstempel im persönlichen Downloads-Verzeichnis ab:
+\begin{quote}
+    \texttt{SES\_Report\_Single\_Panel\_<Szenarioname>\_<Zeitstempel>.pdf}
+\end{quote}
+Der Bericht fasst alle Kennwerte übersichtlich zusammen, eignet sich direkt zur Dokumentation und späterem abgleich der realen Prüfstandsergebnisse.
+
+\clearpage
+
+\section{Workflow 2: Automatisierte Laminat-Optimierung} \label{sec:optimize_panel}
+
+Das Skript \texttt{00\_Scripts/Optimize\_Panel.m} führt eine mehrkriterielle Optimierung durch. Ziel ist es, aus allen regelkonformen Kombinationen von Fasermaterialien, Lagenanzahlen und Orientierungswinkeln das leichteste Sandwich-Laminat zu ermitteln, das alle geforderten Strukturkennwerte erfüllt.
+
+\subsection*{Zielwerte definieren (Targets)}
+Die Mindestanforderungen an das optimierte Panel werden direkt im Konfigurationsabschnitt von \texttt{Optimize\_Panel.m} hinterlegt:
+
+\begin{lstlisting}[style=vscodeLightMatlab]
+Targets = struct();
+Targets.safety_factor = 1.0;    % Sicherheitsfaktor auf Zielwerte (z.B. 1.0 = keine Reserve, 1.1 = +10%)
+Targets.Gradient      = 3000;   % Mindest-Gradient [N/mm]
+Targets.Energy        = 60;     % Mindest-Energieaufnahme [J]
+Targets.EI            = 0;      % Mindest-Biegesteifigkeit [N*mm^2]
+Targets.UTS           = 0;      % Mindest-Deckhautfestigkeit [MPa]
+Targets.E             = 0;      % Mindest-E-Modul Deckhaut [GPa]
+Targets.F_max         = 0;      % Mindest-Bruchkraft [N]
+Targets.t_skin_max    = 0;      % Max. Deckhautdicke [mm]
+\end{lstlisting}
+
+\begin{itemize}
+    \item \textbf{Sicherheitsfaktor (\texttt{safety\_factor})}: Skaliert alle aktivierten Mindest-Targets intern mit diesem Faktor (z.\,B. $1{,}10$ für $+10\,\%$ Reserve: $3000 \cdot 1{,}10 = 3300\,\text{N/mm}$).
+    \item \textbf{Inaktiv-Schalter ($0$)}: Jeder Zielwert mit dem Wert $0$ wird vom Optimierungsalgorithmus ignoriert und stellt keine Restriktion dar.
+\end{itemize}
+
+\subsection*{Fertigungs- \& Regelwerksgrenzen (OptSettings)}
+Zur Einhaltung von Fertigungsstandards und FSG-Vorgaben stehen folgende Optionen zur Verfügung:
+
+\begin{lstlisting}[style=vscodeLightMatlab]
+OptSettings.min_plies             = 4;           % Mindestanzahl Lagen je Deckhaut
+OptSettings.max_plies             = 8;           % Maximalanzahl Lagen je Deckhaut
+OptSettings.angle_mode            = 'simple';    % 'simple' ([0, +/-21]) oder 'advanced'
+OptSettings.material_pool         = 'all';       % 'all' oder 'standard'
+OptSettings.sichtlage_active      = true;        % FSG-Sichtlage zwingend aktiv
+OptSettings.sichtlage_material    = {'t7', 'f'}; % Erlaubte Sichtlagengewebe
+OptSettings.sichtlage_angle       = 45;          % Sichtlagenwinkel in Grad
+OptSettings.core_interface_fabric = true;        % Gewebelage zur Kernanbindung
+\end{lstlisting}
+
+\begin{itemize}
+    \item \textbf{Lagenbegrenzung} (\texttt{min\_plies} / \texttt{max\_plies}): Definiert den Suchbereich für die Einzellagen pro Deckhaut (Standard: 4 bis 8 Lagen).
+    \item \textbf{Winkelmodus} (\texttt{angle\_mode}): \texttt{'simple'} nutzt die bewährten Standardwinkel ($0^\circ, \pm 21^\circ$); \texttt{'advanced'} erweitert den Suchraum um $\pm 30^\circ, \pm 45^\circ, \pm 60^\circ$.
+    \item \textbf{Sichtlage} (\texttt{sichtlage\_active}): Garantiert die Einhaltung der FSG-Regel T\,3.5.7 (äußerste Lage muss zwingend einlagiges Gewebe sein, Standard: $+45^\circ$ \texttt{t7} oder \texttt{f}).
+    \item \textbf{Kernanbindung} (\texttt{core\_interface\_fabric}): Erzwingt eine Gewebelage direkt am Wabenkern, um Delaminationsrisiken vorzubeugen.
+\end{itemize}
+
+\subsection*{Auswertung der Optimierungsergebnisse}
+Nach Ausführung von \texttt{Optimize\_Panel.m} werden drei Ergebnisformate bereitgestellt:
+\begin{enumerate}
+    \item \textbf{Vorher/Nachher-Vergleich im Terminal}: Direkte Gegenüberstellung der Baseline (aus \texttt{Scenariodata.m}) gegen das Optimum mit genauer Massenersparnis in Gramm und Prozent.
+    \item \textbf{TOP-5 Rangliste}: Auflistung der 5 leichtesten regelkonformen Laminate inklusive Halbschalen-Layup-String zur direkten Übernahme.
+    \item \textbf{Kraft-Weg-Vergleichsplot}: Visuelle Gegenüberstellung der Arbeitskurven von Baseline (Rot) und Optimum (Grün) mit Markierung von $F_{max}$ und der geforderten Gradienten-Grenzlinie.
+    \item \textbf{PDF-Optimierungsbericht}: Automatischer Export der gesamten Zusammenfassung als PDF in den \textbf{\texttt{Downloads}}-Ordner.
+\end{enumerate}

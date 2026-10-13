@@ -84,10 +84,11 @@ for r = 1:height(mat_table)
 end
 
 % Aliase zuweisen
-% 'm': 'ud', 'm40jud'
+% 'm': 'ud', 'm40jud', 'hm'
 if isfield(cached_dict, 'm')
     cached_dict.ud     = cached_dict.m;
     cached_dict.m40jud = cached_dict.m;
+    cached_dict.hm     = cached_dict.m;
 end
 % 't7': 't', 't700', 'ft700', 't700f', 'ft', 'tf'
 if isfield(cached_dict, 't7')

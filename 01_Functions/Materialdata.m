@@ -28,16 +28,6 @@ elseif isfield(Scenario, 't_factor')
     t_factor = Scenario.t_factor;
 end
 
-% Faservolumenanteil-Faktor
-vf_factor = 1.0;
-if isfield(Calib, 'fiber_volume_factor')
-    vf_factor = Calib.fiber_volume_factor;
-elseif isfield(Calib, 'fasergehalt_factor')
-    vf_factor = Calib.fasergehalt_factor;
-elseif isfield(Calib, 'fasergehalt')
-    vf_factor = Calib.fasergehalt;
-end
-
 % Bruchdehnung der Deckhaut (optional)
 failure_strain = [];
 if isfield(Calib, 'failure_strain') && ~isempty(Calib.failure_strain)
@@ -59,7 +49,7 @@ if ~isfield(Scenario, 'layup') || isempty(Scenario.layup)
     cfk_props.core_t = 18;
     cfk_props.core_dir = '';
 else
-    cfk_props = calc_cfk_properties(Scenario.layup, csv_path, calc_energy, t_factor, vf_factor, failure_strain, use_lpf);
+    cfk_props = calc_cfk_properties(Scenario.layup, csv_path, calc_energy, t_factor, failure_strain, use_lpf);
 end
 
 Mdata = struct();
@@ -71,13 +61,14 @@ Mdata.cfk.UTS        = cfk_props.UTS;
 
 % Kerneigenschaften (Plascore PAMG-XR1-5056)
 core_dir = 'L';
-if isfield(Calib, 'core_dir') && ~isempty(Calib.core_dir)
-    core_dir = upper(Calib.core_dir);
-elseif isfield(Scenario, 'core_dir') && ~isempty(Scenario.core_dir)
-    core_dir = upper(Scenario.core_dir);
-end
 if isfield(cfk_props, 'core_dir') && ~isempty(cfk_props.core_dir)
     core_dir = upper(cfk_props.core_dir);
+end
+if isfield(Scenario, 'core_dir') && ~isempty(Scenario.core_dir)
+    core_dir = upper(Scenario.core_dir);
+end
+if isfield(Calib, 'core_dir') && ~isempty(Calib.core_dir)
+    core_dir = upper(Calib.core_dir);
 end
 
 if startsWith(core_dir, 'W')
@@ -98,17 +89,23 @@ else
     Mdata.core.t = 18;
 end
 
+% Kernschub-Option
+if isfield(Calib, 'include_core_shear')
+    Mdata.include_core_shear = Calib.include_core_shear;
+end
+
+% Prüfstands- & Vorrichtungssteifigkeit
+if isfield(Calib, 'fixture_stiffness')
+    Mdata.fixture_stiffness = Calib.fixture_stiffness;
+else
+    Mdata.fixture_stiffness = Inf;
+end
+
 % Bruchlast- & Modellparameter
 if isfield(Calib, 'post_fail_factor')
     Mdata.post_fail_factor = Calib.post_fail_factor;
 else
     Mdata.post_fail_factor = 0.262;
-end
-
-if isfield(Calib, 'gradient_factor')
-    Mdata.gradient_factor = Calib.gradient_factor;
-else
-    Mdata.gradient_factor = 1.0;
 end
 
 Mdata.failure_strain = failure_strain;

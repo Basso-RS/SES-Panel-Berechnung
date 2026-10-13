@@ -1,0 +1,107 @@
+\chapter{Erweiterte Konfiguration \& Kalibrierung} \label{ch:konfiguration}
+
+Nachdem im Quick Start (Abschnitt \ref{sec:quickstart}) die grundlegende Geometrie und das Erstellen eines Standard-Laminats in \texttt{Scenariodata.m} vorgestellt wurden, behandelt dieses Kapitel weiterführende Syntax-Regeln, Sonderfunktionen und die physikalischen Kalibrierungsparameter.
+
+\section{Erweiterte Layup-Syntax \& Sonderregeln} \label{sec:layup_syntax}
+
+Über die Standard-Definition hinaus stehen in \texttt{Scenariodata.m} folgende Funktionen und Konventionen zur Verfügung:
+
+\begin{enumerate}
+    \item \textbf{Symmetrische Kurzschreibweise (\texttt{sym})}:
+    \begin{itemize}
+        \item Ist die Unterseite exakt spiegelsymmetrisch zur Oberseite aufgebaut, kann nach dem Kern das Schlüsselwort \texttt{sym} gesetzt werden.
+        \item Der Parser spiegelt automatisch alle Lagen vor dem Kern spiegelbildlich auf die Unterseite und kehrt dabei die Vorzeichen von Winkellagen automatisch um (z.\,B. $+21^\circ \to -21^\circ$).
+    \end{itemize}
+\begin{lstlisting}[style=vscodeLightMatlab]
+% Kompakte symmetrische Notation:
+Scenario.layup = '45t7/0m/21m/cp/18core/sym';
+
+% Entspricht vollstaendig aufgeloest:
+% '45t7/0m/21m/cp/18core/cp/-21m/0m/45t7'
+\end{lstlisting}
+
+    \item \textbf{Kernausrichtung L- vs. W-Richtung (\texttt{core} vs. \texttt{corew})}:
+    \begin{itemize}
+        \item \textbf{Standard} (\texttt{18core}): Ribbon- bzw. L-Richtung parallel zur Längsachse ($G_L = 550\,\text{MPa}$). Dies ist der Standard für maximale Tragfähigkeit.
+        \item \textbf{Querausrichtung} (\texttt{18corew}): Einbau um $90^\circ$ gedreht (W-Richtung). Der Schubmodul sinkt auf $G_W = 230\,\text{MPa}$, was zu spürbar höherer Schubverformung führt.
+    \end{itemize}
+
+    \item \textbf{Vorrichtungsspiel \& Setzweg (\texttt{panel.slack})}:
+    \begin{itemize}
+        \item In \texttt{Scenario.panel.slack = 0.0;} kann ein Setzweg der Prüfaufnahme in $\text{mm}$ hinterlegt werden.
+        \item Dieser Versatz verschiebt den Kraftanstieg auf der Wegachse und dient dem exakten Abgleich mit Prüfstandskurven, falls bei Prüfbeginn Vorrichtungsspiel vorliegt.
+    \end{itemize}
+
+    \item \textbf{Schichtreihenfolge \& Belastungsrichtung}:
+    \begin{itemize}
+        \item Die Notation im Layup-String erfolgt strikt von \textbf{oben nach unten}:
+        \item \textbf{Vor dem Kern (Oberseite)}: Kontaktzone mit dem Biegestempel $\to$ Druckbeanspruchung im 3-Punkt-Biegeversuch.
+        \item \textbf{Nach dem Kern (Unterseite)}: Auflage auf den Stützrollen $\to$ Zugbeanspruchung.
+        \item \textit{(Wichtig: Bei asymmetrischen Aufbauten entscheidet diese Orientierung maßgeblich darüber, ob Faserzug- oder Faserdruckversagen die Maximalkraft limitiert.)}
+    \end{itemize}
+\end{enumerate}
+
+\clearpage
+
+\section{Kalibrierungs- \& Fertigungseinstellungen (Calibration.m)} \label{sec:calibration}
+
+In der Datei \texttt{01\_Functions/Calibration.m} sind die zentralen Kalibrierungswerte für Fertigungseinflüsse, Materialkorrekturen und das Versagensmodell hinterlegt.
+
+\begin{tcolorbox}[colback=warnbg,colframe=warnred,arc=2mm,title=\textbf{ACHTUNG: Zentrale Modellparameter}]
+Diese Parameter bilden das physikalische Fundament des gesamten Simulationsmodells. \\
+\textbf{Änderungen dürfen nur mit triftigem Grund vorgenommen werden}, da sie direkte Auswirkungen auf alle Berechnungsergebnisse und die Validierung gegen Prüfstandsergebnisse haben!
+\end{tcolorbox}
+
+\begin{lstlisting}[style=vscodeLightMatlab]
+% Auszug aus 01_Functions/Calibration.m:
+Calib.thickness_factor    = 0.95;   % Bauteildicke nach Aushaertung (95% Nenndicke, erhoeht E-Modul um 1/0.95)
+Calib.core_dir            = 'L';    % Wabenkern-Richtung ('L' = Ribbon, 'W' = Quer)
+Calib.include_core_shear  = true;   % Kernschubverzerrung nach ASTM C393 Dreipunktbiegung (Timoshenko)
+Calib.fixture_stiffness   = 22218;  % [N/mm] Exakte SES Rig Compliance aus Steel-Tube-Kalibrierversuch
+Calib.post_fail_factor    = 0.250;  % Restkraftplateau nach Peak (F_post = F_max * factor)
+Calib.failure_criterion   = 'hashin';% 'hashin' oder 'fixed_strain'
+Calib.softening_factor    = 0.95;   % Sekanten-Softeningfaktor vor Peak
+Calib.indentation_depth   = 0.15;   % Lokale Rolleneindrueckung [mm]
+Calib.energy_mode         = 'to_peak';% Energieberechnung ('to_peak' oder 'ses_total')
+\end{lstlisting}
+
+\subsection*{Parameter im Detail für begründete Anpassungen:}
+
+\begin{itemize}
+    \item \textbf{Kompaktierungsfaktor} (\texttt{thickness\_factor}): \par
+    Berücksichtigt die reale Kompaktierung des Prepregs unter Druck im Heißpressverfahren ($\approx 6\,\text{bar}$). Ein Wert von $0{,}95$ bedeutet, dass das ausgehärtete Laminat $95\,\%$ der theoretischen Nenndicke erreicht. Durch die Verringerung der Schichtdicke bei gleichbleibender Fasermasse steigt der wirksame E-Modul physikalisch um $1 / 0{,}95$.
+
+    \item \textbf{Prüfstands- \& Vorrichtungssteifigkeit (Rig Compliance)} (\texttt{fixture\_stiffness}): \par
+    Reale Prüfmaschinen und Biegeaufnahmen verformen sich unter Prüfkraft elastisch. Im Berechnungsmodell wird diese Nachgiebigkeit über eine Reihenschaltung der Federsteifigkeiten als "`virtueller Prüfstand"' abgebildet:
+    \begin{equation}
+        \frac{1}{K_{\text{ges}}} = \frac{1}{K_{\text{Biegung}}} + \frac{1}{K_{\text{Schub}}} + \frac{1}{K_{\text{rig}}} = \frac{L^3}{48 \, EI} + \frac{L}{4 \, S} + \frac{1}{K_{\text{rig}}}
+    \end{equation}
+    Der Wert $K_{\text{rig}} = 22\,218\,\text{N/mm}$ stammt direkt aus dem offiziellen Formula Student SES Baseline Steel Tube Test (T3.2) mit zwei kalibrierten Stahlrohren auf $400\,\text{mm}$ Stützweite. Dadurch bleiben alle Messdaten in der Excel-Tabelle $100\,\%$ unverfälschte Rohdaten, während die Simulation die reale Maschinenelastizität physikalisch exakt einrechnet.
+
+    \item \textbf{Kernschubanteil nach Timoshenko} (\texttt{include\_core\_shear}): \par
+    Berücksichtigt neben der reinen Deckhautbiegung ($L^3 / (48 EI)$) die transversale Kernschubverzerrung nach \abk{ASTM} C393 ($L / (4 S)$). Bei Sandwichplatten mit Wabenkern kann der Schubanteil je nach Kerndicke und Faseraufbau $15\,\%$ bis $30\,\%$ der elastischen Gesamtdurchbiegung ausmachen.
+
+    \item \textbf{Kernausrichtung} (\texttt{core\_dir}): \par
+    Hauptausrichtung des Wabenkerns.
+    \begin{itemize}
+        \item \hyperref[abk:L]{\texttt{'L'}}: Längs-/Ribbon-Richtung ($G_{core} = 550\,\text{MPa}$) für maximale Tragfähigkeit in Längsrichtung.
+        \item \hyperref[abk:W]{\texttt{'W'}}: Querrichtung ($G_{core} = 230\,\text{MPa}$). Führt zu deutlich höherer Schubverformung und geringerem Steifigkeitsgradienten.
+    \end{itemize}
+
+    \item \textbf{Versagenskriterium} (\texttt{failure\_criterion}): \par
+    Bruchhypothese für die Deckschichten.
+    \begin{itemize}
+        \item \texttt{'hashin'}: Differenziert zwischen Faserzug, Faserdruck, Matrixzug und Matrixdruck unter Spannungsinteraktion.
+        \item \texttt{'fixed\_strain'}: Einfacher Dehnungsnachweis bei Erreichen einer vorgegebenen Grenzdehnung.
+    \end{itemize}
+
+    \item \textbf{Nachbruchfaktor} (\texttt{post\_fail\_factor}): \par
+    Definiert das Restkraft-Niveau nach dem ersten Versagens-Peak ($F_{post} = F_{max} \cdot \text{factor}$). Dieser Wert wurde experimentell über alle Prüfstandsdaten der Saisons 2024--2027 kalibriert ($0{,}250 = 25\,\%$ Resttragfähigkeit).
+
+    \item \textbf{Energiemodus} (\texttt{energy\_mode}): \par
+    Definiert das Integrationsintervall für die absorbierte Verformungsenergie:
+    \begin{itemize}
+        \item \texttt{'to\_peak'}: Berechnet die Energieaufnahme bis zum ersten Faserbruch bei $F_{max}$. Wird genutzt, um die Berechnung 1:1 mit den Messwerten aus der Prüfstands-Excel (\texttt{02\_Data/\allowbreak Pruefstand\_\allowbreak Rohdaten\_\allowbreak Benchmark.xlsx}) bis zum Peak abzugleichen.
+        \item \texttt{'ses\_total'}: Vollständige Energieintegration über den gesamten Weg von $0$ bis $12{,}7\,\text{mm}$ (inklusive Wabenstauchung nach dem Bruch). Wird für den offiziellen Formula Student \abk{SES}-Nachweis zwingend gefordert.
+    \end{itemize}
+\end{itemize}

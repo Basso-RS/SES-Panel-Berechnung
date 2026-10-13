@@ -18,6 +18,9 @@ if nargin < 4 || isempty(OptSettings)
 end
 
 % Standardwerte Targets
+if isfield(Targets, 'SF') && Targets.SF > 0 && (~isfield(Targets, 'safety_factor') || Targets.safety_factor <= 0)
+    Targets.safety_factor = Targets.SF;
+end
 if ~isfield(Targets, 'safety_factor') || Targets.safety_factor <= 0
     Targets.safety_factor = 1.0;
 end
@@ -200,7 +203,7 @@ for i = 1:n_total
     t_factor = 0.95;
     if isfield(Calib, 'thickness_factor'), t_factor = Calib.thickness_factor; end
     
-    cfk_props = calc_cfk_properties(full_layup, csv_path, false, t_factor, 1.0, 0.00262);
+    cfk_props = calc_cfk_properties(full_layup, csv_path, false, t_factor, 0.00262);
     
     if Targets.t_skin_max > 0 && cfk_props.t_top > Targets.t_skin_max
         continue;
@@ -219,9 +222,7 @@ for i = 1:n_total
         continue;
     end
     
-    grad_factor = 1.05;
-    if isfield(Calib, 'gradient_factor'), grad_factor = Calib.gradient_factor; end
-    grad_approx = (48 * EI_approx / (Scenario.panel.l^3)) * grad_factor;
+    grad_approx = 48 * EI_approx / (Scenario.panel.l^3);
     
     if grad_target > 0 && grad_approx < (grad_target * 0.92)
         continue;

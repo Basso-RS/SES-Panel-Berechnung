@@ -1,0 +1,165 @@
+\chapter{Erste Schritte, Systemgrenzen \& Quick Start} \label{ch:quickstart}
+
+\section{Grundverständnis \& Systemgrenzen} \label{sec:systemgrenzen}
+
+\begin{tcolorbox}[colback=warnbg,colframe=warnred,arc=2mm,title=\textbf{ACHTUNG: Theoretische Simulation vs. Reale Fertigung}]
+Die Berechnungen dieses Tools basieren auf analytischen Modellen unter Annahme idealer Materialeigenschaften. 
+Die realen Prüfstandsergebnisse weichen in Abhängigkeit von der \textbf{Fertigungsqualität und äußeren Einflüssen} ab.
+\end{tcolorbox}
+
+\begin{itemize}
+    \item \textbf{Einfluss der Fertigungsqualität}: Faktoren wie der effektive Anpressdruck im Heißpressverfahren, Temperaturzyklen, Faserauslenkung, Porengehalt und Harzaufnahme der offenen Wabenkammern beeinflussen die Steifigkeit und Festigkeit maßgeblich.
+    \item \textbf{Erwartete Abweichung}: Eine Abweichung von \textbf{ca. 10\,\%} zwischen Simulation und Prüfstandsergebnis ist bei sorgfältiger, reproduzierbarer Prepreg-Fertigung normal und als Auslegungskorridor zu berücksichtigen.
+    \item \textbf{Nichtlinearität der Energieaufnahme}: Während der elastische Anstieg Gradient sehr präzise vorhergesagt werden kann, unterliegt die Energieberechnung bis zur Normdurchbiegung von $12{,}7\,\text{mm}$ größeren Streuungen. 
+        Grund hierfür ist der hochgradig nichtlinearität im gesammten Bereich vor und nach Überschreiten der Maximalkraft. Zur fundierten Plausibilisierung der absorbierten Energie wurden diskrete Versagensmodi implementiert (weiterführende Details siehe Technische Dokumentation).   
+\end{itemize}
+\clearpage
+
+
+
+
+
+
+
+
+
+
+\section{Kurzbeschreibung \& Systemzweck} \label{sec:systemzweck}
+
+Das Tool dient der schnellen, unkomplizierten und regelkonformen Vorauslegung von Faserverbund-Sandwichplatten (\hyperref[abk:CFK]{CFK}-Deckschichten mit Aluminium-Wabenkern oder Hartschaum) für das Formula Student Monocoque.
+
+Es bildet den genormten \textbf{3-Punkt-Biegeversuch} (nach \hyperref[abk:ASTM]{ASTM} C393 / D7250) rechnerisch ab und ermittelt die für das \hyperref[abk:SES]{\textbf{Structural Equivalency Spreadsheet (SES)}} geforderten Strukturkennwerte:
+\begin{enumerate}
+    \item Äquivalente Biegesteifigkeit (\hyperref[abk:EI]{$EI$}) des Verbunds
+    \item Elastisches Biegemodul und Steifigkeitsgradient
+    \item Maximale Bruchkraft ($F_{max}$) unter Berücksichtigung Versagensmodi
+    \item Energieabsorption ($E_{12.7}$) bis $12{,}7\,\text{mm}$ Stempelweg
+    \item und weitere informative Größen
+\end{enumerate}
+
+
+
+
+
+
+
+
+
+
+\section{Repository klonen mit Sourcetree} \label{sec:sourcetree}
+
+Um die Versionsverwaltung über Git durch eine übersichtliche und intuitiv bedienbare grafische Benutzeroberfläche (\hyperref[abk:GUI]{GUI}) zu vereinfachen, wird die Verwendung von Atlassian Sourcetree empfohlen:
+
+\begin{enumerate}
+    \item \textbf{Insatlation}: https://www.atlassian.com/software/sourcetree
+    \item \textbf{Optional GitHub Account}: https://github.com 
+    \begin{itemize}
+        \item \textbf{Favorisieren}: Favorisiere das Repository um es leichter wieder zu finden.
+    \end{itemize}
+    \item \textbf{Repository-URL}: https://github.com/Basso-RS/SES-Panel-Berechnung.git 
+    \item \textbf{Sourcetree öffnen}: Klicke oben auf die Registerkarte \textbf{„Klonen / Neu“} (\textit{Clone}).
+    \item \textbf{Pfade angeben}:
+    \begin{itemize}
+        \item \textbf{Quellpfad / URL}: Füge die kopierte Git-URL ein.
+        \item \textbf{Zielfeld}: Wähle dein lokales Arbeitsverzeichnis.
+    \end{itemize}
+    \item \textbf{Klonen ausführen}: Klicke auf \textbf{„Klonen“}. Sourcetree lädt alle Dateien, Skripte und Materialdatenbanken herunter.
+    \item \textbf{Branch prüfen}: Stelle sicher, dass du auf dem Haupt-Branch (\texttt{main} bzw. \texttt{master}) arbeitest.
+\end{enumerate}
+\clearpage
+
+
+
+
+
+
+
+
+
+\section{Quick Start: In 4 Schritten zur ersten Berechnung} \label{sec:quickstart}
+
+Das gesamte Pfad- und Umgebungsmanagement ist automatisiert! 
+\par In vier Schritten führst du deine erste Simulation durch:
+
+
+
+
+
+\subsection*{Schritt 1: Projekt in MATLAB initialisieren}
+
+Öffne MATLAB und navigiere in das geklonte Projektverzeichnis. \par
+Die Projektdatei \texttt{SES\_Panelberechnung.prj} im Verzeichnisbaum  von MATLAB (Links) per Doppelklick oder Rechtsklick ausführen:
+
+\textit{(Hintergrund: Durch das Öffnen des MATLAB-Projekts werden alle erforderlichen Unterordner (\texttt{00\_Scripts}, \texttt{01\_Functions}, \texttt{02\_Data}) automatisch in den MATLAB-Suchpfad aufgenommen.)}
+
+
+
+
+
+\subsection*{Schritt 2: Panel \& Lagenaufbau prüfen}
+Öffne die Datei \texttt{01\_Functions/Scenariodata.m}. \par
+Hier ist der zu berechnende Prüfkörper definiert:
+\begin{lstlisting}[style=vscodeLightMatlab]
+Scenario.panel.b     = 275;   % mm Panel-Breite
+Scenario.panel.l     = 400;   % mm Stützweite
+Scenario.panel.w     = 12.7;  % mm Max. Durchbiegung
+\end{lstlisting}
+
+Layup Informationen für eine Berechnung eines Panels:
+
+\begin{lstlisting}[style=vscodeLightMatlab]
+Scenario.name   = '26_16';
+Scenario.core_t = 18;        % 18 mm Wabenkern
+Scenario.layup  = '45t7/0m/0m/0m/21m/45t7/cp/18core/cp/45t7/-21m/0m/0m/0m/45t7';
+\end{lstlisting}
+Passe bei Bedarf den Namen, die Kerndicke (\texttt{core\_t}) oder den Layup-String an und speichere die Datei.
+
+Zu beachten ist hier die angegebene Abkürzungskonvention der Material- und Lagen-Tokens:
+\begin{itemize}
+    \item \textbf{Faserlagen}: Zusammensetzung aus \texttt{[Winkel][Kürzel]}, z.\,B. \texttt{45t7} ($+45^\circ$ T700-Gewebe) oder \texttt{-21m} ($-21^\circ$ \hyperref[abk:UD]{M40J-UD}).
+    \item \textbf{Wabenkern}: Deklaration über \texttt{[Dicke]core}, z.\,B. \texttt{18core} für $18\,\text{mm}$ Aluwabe.
+    \item \textbf{Klebefilm}: \hyperref[abk:CP]{\texttt{cp}} deklariert den beidseitig am Kern verwendeten Harzfilm (CP006).
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{llcp{7.5cm}}
+\toprule
+\textbf{Kürzel} & \textbf{Materialbezeichnung} & \textbf{Typ} & \textbf{Funktion / Eigenschaften} \\
+\midrule
+\texttt{t7}   & T700 Fabric         & Gewebe & Zähe Sichtlage ($45^\circ$) \& Kernanbindung \\
+\texttt{m}    & M40J UD             & UD     & Hauptlastaufnahme ($0^\circ, \pm 21^\circ$, Hochmodul) \\
+\texttt{f}    & M40J Fabric         & Gewebe & Hochsteife Decklage (Hochmodul-Gewebe) \\
+\texttt{t8}   & T800S UD            & UD     & Hochfeste Zwischenlagen (IM-Faser) \\
+\texttt{z}    & ZZ300T              & Gewebe & Zylon/PBO für maximale Energieaufnahme \\
+\texttt{a}    & SIGAPREG A W173     & Gewebe & Aramid/Kevlar für Durchschlagschutz \\
+\texttt{cp}   & Coupling Film CP006 & Harz   & Klebefilm zwischen Kern und Deckhaut \\
+\texttt{core} & PAMG 5056 Aluwabe   & Kern   & Wabenkern (z.\,B. \texttt{18core}) \\
+\bottomrule
+\end{tabular}
+\caption{Materialkürzel und Basisfunktionen im Lagenaufbau.}
+\label{tab:quickstart_materials}
+\end{table}
+
+
+\subsection*{Schritt 3: Skript ausführen}
+
+Führe das Berechnungsskript \texttt{Calculate\_Single\_Panel}, 
+aus dem Ordner \texttt{00\_Scripts} über RUN im Editor-Tab aus. 
+
+\textit{(Alternativ: Datei \texttt{00\_Scripts/Calculate\_Single\_Panel.m} im MATLAB-Editor öffnen und \texttt{F5} drücken).}
+
+
+
+
+
+\subsection*{Schritt 4: Ergebnisse einsehen}
+Nach Abschluss der Berechnung (Rechenzeit typischerweise $< 0{,}1\,\text{Sekunden}$):
+\begin{enumerate}
+    \item \textbf{Terminal-Report}: Im MATLAB Command Window erscheint eine detaillierte Zusammenfassung aller Steifigkeits-, Festigkeits- und Kennwerte.
+    \item \textbf{Automatischer PDF-Prüfbericht}: Das Skript erzeugt automatisch einen DIN-A4-Prüfbericht und legt diesen mit Zeitstempel im persönlichen \textbf{\texttt{Downloads}}-Verzeichnis ab:
+    \begin{quote}
+        \texttt{SES\_Report\_Single\_Panel\_26\_20\_<Zeitstempel>.pdf}
+    \end{quote}
+\end{enumerate}

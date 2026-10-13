@@ -1,0 +1,96 @@
+\chapter{Troubleshooting \& Fehlerbehebung} \label{ch:troubleshooting}
+
+Dieses Kapitel bietet schnelle Hilfe bei typischen Eingabefehlern, Fehlermeldungen in MATLAB und unplausiblen Berechnungsergebnissen.
+
+\section{Syntax- \& Eingabefehler im Layup} \label{sec:ts_syntax}
+
+Der Parser (\texttt{parse\_layup.m}) zerlegt den Lagenaufbau-String entlang der Trennzeichen \texttt{'/'}. Weicht die Syntax von der Konvention ab, reagiert das System mit Fehlermeldungen oder unerwarteten Modellen:
+
+\begin{itemize}
+    \item \textbf{Unbekanntes Materialkürzel}:
+    \begin{quote}
+        \texttt{Error: Material xyz nicht in materials.csv gefunden.}
+    \end{quote}
+    \textit{Ursache}: Ein Token wurde falsch getippt oder die Reihenfolge von Winkel und Material wurde vertauscht (z.\,B. \texttt{m0} statt \texttt{0m} oder \texttt{f45} statt \texttt{45f}). Der Parser erwartet immer zuerst den Winkel (inkl. Vorzeichen), direkt gefolgt vom Kürzel.
+    
+    \item \textbf{Falsche Vorzeichenplatzierung}:
+    Ein Token wie \texttt{45-m} wird als Winkel $45^\circ$ und Material \texttt{'-m'} interpretiert. Das Vorzeichen muss zwingend ganz vorne stehen (z.\,B. \texttt{-45m} oder \texttt{-21m}).
+
+    \item \textbf{Vergessener Kern-Token (\texttt{core})}:
+    Wird kein Kern (z.\,B. \texttt{18core}) angegeben, interpretiert das Tool den Aufbau als monolithisches Voll-CFK-Laminat ohne Sandwich-Kern. Die Kernhöhe wird zu \texttt{NaN} gesetzt und die Kernschubberechnung entfällt.
+
+    \item \textbf{Fehlender Klebefilm (\texttt{cp})}:
+    Wird \texttt{cp} vor und nach dem Kern weggelassen, bricht die Simulation zwar nicht ab, aber die berechnete Panelmasse ist ca. $100\,\text{g/m}^2$ pro Deckhaut zu niedrig.
+
+    \item \textbf{Fehlerhafte Symmetrie-Syntax (\texttt{sym})}:
+    Der Token \texttt{sym} darf ausschließlich als letztes Element nach dem Kern stehen (z.\,B. \texttt{.../18core/cp/sym}). Werden nach \texttt{sym} weitere Lagen notiert, wird das Schlüsselwort als Material-Token fehlinterpretiert.
+\end{itemize}
+
+\section{Materialdaten \& Datenbankprobleme} \label{sec:ts_cache}
+
+Die Materialwerte werden zentral über die Datei \texttt{02\_Data/materials.csv} verwaltet. Beim Bearbeiten oder Hinzufügen von Datensätzen sind folgende Punkte zu beachten:
+
+\begin{itemize}
+    \item \textbf{Werteänderung in \hyperref[abk:CSV]{CSV} wird in MATLAB nicht übernommen}:
+    Die Funktion \texttt{load\_materials.m} nutzt aus Performancegründen einen internen \hyperref[abk:RAM]{RAM}-Cache. Wird die CSV-Datei extern in Excel oder einem Editor geändert, greift MATLAB weiterhin auf die im Speicher liegenden Altwerte zu. \par
+    \textit{Lösung}: Vor einem erneuten Rechenlauf den Speicher über das Command Window leeren:
+    \begin{lstlisting}[style=vscodeLightMatlab]
+    clear functions; % Leert den Material-Cache
+    \end{lstlisting}
+    Alternativ kann das Neuladen mit \texttt{load\_materials([], true)} erzwungen werden.
+
+    \item \textbf{Falsches CSV-Trennzeichen}:
+    Die Datei \texttt{materials.csv} muss zwingend mit Semikolon (\texttt{;}) als Spaltentrennzeichen gespeichert werden. Werden Kommata oder Tabulatoren verwendet, schlägt das Einlesen fehl (\texttt{detectImportOptions}).
+
+    \item \textbf{Fehlende Festigkeitskennwerte in CSV}: \par
+    Sind Kennwerte wie $X_t, X_c, Y_t, Y_c$ oder $S_{12}$ in der CSV-Tabelle leer oder $\le 0$, setzt der Parser automatisch einen Schutzwert von $10^6\,\text{MPa}$. In diesem Fall meldet das Tool keinen Faserbruch für diese Lage.
+\end{itemize}
+
+\section{Unplausible Simulationsergebnisse} \label{sec:ts_ergebnisse}
+
+Weichen die Ergebnisse drastisch von Erfahrungswerten oder Prüfstandsdaten ab, liegt meist eine Fehleinstellung in den Parametern vor:
+
+\begin{itemize}
+    \item \textbf{Biegesteifigkeit oder Gradient deutlich zu niedrig}:
+    \begin{itemize}
+        \item \textit{Kernorientierung}: Steht der Kern auf Querausrichtung (\texttt{'W'}), halbiert sich der Schubmodul von $550\,\text{MPa}$ auf $230\,\text{MPa}$. Dadurch wachsen die Schubverformungen massiv an.
+        \item \textit{Kompaktierung}: Wurde \texttt{thickness\_factor} in \texttt{Calibration.m} versehentlich verstellt? Der Standardwert liegt bei $0{,}95$.
+    \end{itemize}
+
+    \item \textbf{Kraft-Weg-Kurve ist horizontal verschoben}:
+    Liegt die simulierte Kurve parallel versetzt zur realen Prüfstandskurve, ist in \texttt{Scenariodata.m} ein Vorrichtungsspiel eingetragen (\texttt{Scenario.panel.slack}). Für theoretische Panel-Auslegungen gehört der Wert auf $0{,}0\,\text{mm}$.
+
+    \item \textbf{Berechnete Energie passt nicht zum Prüfstandsversuch}:
+    \begin{itemize}
+        \item \textit{Energiemodus prüfen}: In \texttt{Calibration.m} prüfen, ob \texttt{'to\_peak'} (Abgleich bis $F_{max}$) oder \texttt{'ses\_total'} ($0$ bis $12{,}7\,\text{mm}$ inkl. Restplateau) aktiv ist.
+        \item \textit{Versagensmodus beachten}: Tritt Deckhautknicken (Wrinkling) auf, ist der Realversuch stark von geometrischen Fertigungsungenauigkeiten geprägt. Die theoretische Energieberechnung besitzt hier konstruktionsbedingt die größte Unsicherheit.
+    \end{itemize}
+\end{itemize}
+
+\section{Probleme bei der Laminat-Optimierung} \label{sec:ts_performance}
+
+Beim Ausführen des Skripts \texttt{00\_Scripts/Optimize\_Panel.m} können folgende Konstellationen auftreten:
+
+\begin{itemize}
+    \item \textbf{Meldung: \texttt{KEINE zulässige Lösung gefunden, die alle Targets erfüllt!}}:
+    \begin{itemize}
+        \item \textit{Sicherheitsfaktor zu hoch}: Bei aktivem Sicherheitsfaktor (z.\,B. \texttt{safety\_factor = 1.25}) steigen die Anforderungen um $25\,\%$.
+        \item \textit{Lagenfenster zu eng}: Wenn \texttt{max\_plies = 6} gewählt ist, der geforderte Gradient aber mindestens 8 Lagen verlangt, existiert im gewählten Suchraum keine physikalisch machbare Lösung. \texttt{max\_plies} schrittweise anheben.
+        \item \textit{Widersprüchliche Randbedingungen}: Ein hoher Gradient in Kombination mit einer extrem strengen Dickenbegrenzung (\texttt{t\_skin\_max}) schließt alle tragfähigen Laminate aus.
+    \end{itemize}
+
+    \item \textbf{Lange Rechenzeit bei der Optimierung}: \par
+    Steht \texttt{angle\_mode} auf \texttt{'advanced'}, untersucht der Algorithmus sämtliche Winkelkombinationen aus $[21^\circ, 30^\circ, 45^\circ, 60^\circ]$. Dadurch wächst die Anzahl der Kandidaten exponentiell an. Für schnelle Iterationen immer \texttt{'simple'} nutzen.
+\end{itemize}
+
+\section{Dateisystem, Pfade \& PDF-Export} \label{sec:ts_export}
+
+\begin{itemize}
+    \item \textbf{\texttt{Unrecognized function or variable}}:
+    MATLAB findet die Funktionen nicht. \par
+    \textit{Lösung}: Vor Arbeitsbeginn immer die Projektdatei \texttt{SES\_Panelberechnung.prj} im Hauptverzeichnis doppelklicken. Dadurch werden alle Unterordner (\texttt{00\_Scripts}, \texttt{01\_Functions}, \texttt{02\_Data}) automatisch dem MATLAB-Suchpfad hinzugefügt.
+
+    \item \textbf{PDF-Export schlägt fehl oder Datei wird nicht aktualisiert}:
+    Die Funktion \texttt{export\_pdf\_report.m} speichert Berichte standardmäßig im Ordner \texttt{Downloads}. Ist ein bereits erzeugter PDF-Bericht in einem externen PDF-Viewer (z.\,B. Adobe Acrobat) geöffnet, sperrt Windows die Datei gegen Überschreiben. \par
+    \textit{Lösung}: PDF-Viewer schließen oder das Dokument im Viewer freigeben.
+\end{itemize}

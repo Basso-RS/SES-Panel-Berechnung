@@ -78,6 +78,13 @@ fprintf('  - Absorbierte Energie:    %6.1f J     (Modus: %s)\n', Results.Energy,
 if isfield(Results, 'energy_plausibility')
     fprintf('  - Plausibilität:          %s\n', Results.energy_plausibility);
 end
+if strcmp(energy_mode_str, 'to_peak')
+    fprintf('  - Hinweis Energiemodi:    ''to_peak'' misst bis F_max (fuer Pruefstandsabgleich),\n');
+    fprintf('                            ''ses_total'' bis 12.7 mm (FS-Regelwerksnachweis).\n');
+else
+    fprintf('  - Hinweis Energiemodi:    ''ses_total'' misst bis 12.7 mm (FS-Regelwerksnachweis),\n');
+    fprintf('                            ''to_peak'' bis F_max (fuer Pruefstandsabgleich).\n');
+end
 fprintf('======================================================================\n');
 if ~isnan(duration_ms)
     fprintf('>> Berechnung erfolgreich abgeschlossen in %.2f ms (%.4f s).\n\n', duration_ms, duration_ms / 1000);
