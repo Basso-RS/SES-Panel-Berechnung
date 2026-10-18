@@ -20,10 +20,11 @@ Scenario.layup = '45t7/0m/21m/cp/18core/sym';
 % '45t7/0m/21m/cp/18core/cp/-21m/0m/45t7'
 \end{lstlisting}
 
-    \item \textbf{Kernausrichtung L- vs. W-Richtung (\texttt{core} vs. \texttt{corew})}:
+    \item \textbf{Kernausrichtung \& Beliebige Kerne (\texttt{core}, \texttt{corew}, \texttt{rohacell}, \texttt{nomex})}:
     \begin{itemize}
         \item \textbf{Standard} (\texttt{18core}): Ribbon- bzw. L-Richtung parallel zur Längsachse ($G_L = 550\,\text{MPa}$). Dies ist der Standard für maximale Tragfähigkeit.
         \item \textbf{Querausrichtung} (\texttt{18corew}): Einbau um $90^\circ$ gedreht (W-Richtung). Der Schubmodul sinkt auf $G_W = 230\,\text{MPa}$, was zu spürbar höherer Schubverformung führt.
+        \item \textbf{Beliebige Kernmaterialien}: Neben der Aluwabe können beliebige Kerne (z.\,B. \texttt{15rohacell}, \texttt{20nomex}) über \texttt{materials.csv} frei definiert und genutzt werden (siehe Schritt-für-Schritt-Anleitung in Abschnitt \ref{sec:add_materials}).
     \end{itemize}
 
     \item \textbf{Vorrichtungsspiel \& Setzweg (\texttt{panel.slack})}:
@@ -55,14 +56,14 @@ Diese Parameter bilden das physikalische Fundament des gesamten Simulationsmodel
 \begin{lstlisting}[style=vscodeLightMatlab]
 % Auszug aus 01_Functions/Calibration.m:
 Calib.thickness_factor    = 0.95;   % Bauteildicke nach Aushaertung (95% Nenndicke, erhoeht E-Modul um 1/0.95)
-Calib.core_dir            = 'L';    % Wabenkern-Richtung ('L' = Ribbon, 'W' = Quer)
+Calib.core_dir            = 'L';    % Wabenkern-Richtung ('L' = Ribbon, 'W' = Quer, Fallback)
 Calib.include_core_shear  = true;   % Kernschubverzerrung nach ASTM C393 Dreipunktbiegung (Timoshenko)
 Calib.fixture_stiffness   = 22218;  % [N/mm] Exakte SES Rig Compliance aus Steel-Tube-Kalibrierversuch
 Calib.post_fail_factor    = 0.250;  % Restkraftplateau nach Peak (F_post = F_max * factor)
 Calib.failure_criterion   = 'hashin';% 'hashin' oder 'fixed_strain'
 Calib.softening_factor    = 0.95;   % Sekanten-Softeningfaktor vor Peak
 Calib.indentation_depth   = 0.15;   % Lokale Rolleneindrueckung [mm]
-Calib.energy_mode         = 'to_peak';% Energieberechnung ('to_peak' oder 'ses_total')
+Calib.energy_mode         = 'ses_total';% 'ses_total' (FS-Reglement bis 12.7 mm) | 'to_peak' (Abgleich bis F_max)
 \end{lstlisting}
 
 \subsection*{Parameter im Detail für begründete Anpassungen:}

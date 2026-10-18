@@ -3,8 +3,15 @@ function [Results, Curve] = Deflection(Results, Scenario, Mdata)
 % unter Berücksichtigung von Euler-Bernoulli-Biegesteifigkeit, Mehr-Moden-Versagen
 % und kalibriertem Traversen-Softening.
 
+    % Stützweite (Auflagerabstand) ermitteln
+    if isfield(Scenario.panel, 'span') && ~isempty(Scenario.panel.span)
+        span = Scenario.panel.span;
+    else
+        span = Scenario.panel.l;
+    end
+
     % Biegungsanteil nach SES (Euler-Bernoulli Dreipunktbiegung)
-    nenner = Scenario.panel.l^3 / (48 * Results.EI);
+    nenner = span^3 / (48 * Results.EI);
 
     % Kernschubanteil nach Timoshenko (falls aktiviert)
     inc_shear = false;
@@ -17,7 +24,7 @@ function [Results, Curve] = Deflection(Results, Scenario, Mdata)
         if ~isfield(Results, 'S') || isempty(Results.S) || Results.S == 0
             Results = Shearstiff_calc(Results, Mdata, Scenario);
         end
-        nenner = nenner + Scenario.panel.l / (4 * Results.S);
+        nenner = nenner + span / (4 * Results.S);
     end
 
     % Prüfstands- und Vorrichtungs-Compliance (falls kalibriert)
@@ -36,7 +43,7 @@ function [Results, Curve] = Deflection(Results, Scenario, Mdata)
     else
         y_max = Mdata.core.t/2 + Mdata.cfk.t_top;
     end
-    F_skin = (4 * Results.I * Mdata.cfk.UTS) / (Scenario.panel.l * y_max);
+    F_skin = (4 * Results.I * Mdata.cfk.UTS) / (span * y_max);
 
     % B. Kern-Schubbruch (Querkraft V = F / 2)
     F_core = 2 * Scenario.panel.b * Mdata.core.t * Mdata.core.tau_max;
@@ -44,7 +51,7 @@ function [Results, Curve] = Deflection(Results, Scenario, Mdata)
     % C. Deckhaut-Knicken / Wrinkling (Hoff-Mautner Kriterium)
     if isfield(Mdata.core, 'G') && Mdata.core.G > 0
         sigma_wrinkling = 0.5 * (Mdata.cfk.E_top * 92.0 * Mdata.core.G)^(1/3);
-        F_wrinkling = (4 * Results.I * sigma_wrinkling) / (Scenario.panel.l * y_max);
+        F_wrinkling = (4 * Results.I * sigma_wrinkling) / (span * y_max);
     else
         F_wrinkling = inf;
     end

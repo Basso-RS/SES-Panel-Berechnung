@@ -58,3 +58,64 @@ Bei der Auslegung und manuellen Definition von Laminaten müssen folgende Regelw
     Erreicht die dünnere Deckhaut mindestens $1{,}0\,\text{mm}$ Dicke, ist jedes Dickenverhältnis regelkonform. Beim physischen 3-Punkt-Biegeversuch für den \abk{SES}-Nachweis muss bei asymmetrischen Aufbauten die schwächere Deckhaut auf Zug (Unterseite) getestet werden.
 
 \end{itemize}
+\clearpage
+
+
+
+
+
+\section{Anleitung: Neues Material oder neuen Kern hinzufügen (Plug \& Play)} \label{sec:add_materials}
+
+Das Berechnungstool ist vollständig Plug-\&-Play-fähig: Neue Faserhalbzeuge (\abk{CFK}-\abk{UD}, Gewebe, GFK, Aramid) sowie neuartige Kernmaterialien (Rohacell, Nomex, PVC-Schaum etc.) können ohne Eingriff in den MATLAB-Quellcode direkt über die zentrale Datenbank \texttt{02\_Data/materials.csv} angelegt und sofort im Lagenaufbau verwendet werden.
+
+\subsection*{Schritt 1: Datei materials.csv in Excel öffnen}
+Öffne die Datei \texttt{02\_Data/materials.csv} direkt in Microsoft Excel oder einem Texteditor. Die Datei ist durch Semikolon (\texttt{;}) getrennt aufgebaut.
+
+\subsection*{Schritt 2: Neue Zeile für Werkstoff oder Kern anlegen}
+Trage am Ende der Tabelle eine neue Zeile ein. Je nach Typ (Deckhautlage oder Kern) sind folgende Spalten auszufüllen:
+
+\begin{enumerate}
+    \item \textbf{Für ein neues Deckhaut-Material (z.\,B. CFK, GFK, Aramid, Hybrid):}
+    \begin{itemize}
+        \item \texttt{Name}: Vollständige Bezeichnung (z.\,B. \texttt{IM7 UD} oder \texttt{Glasgewebe 280g}).
+        \item \texttt{E1}, \texttt{E2}, \texttt{G12}: Elastizitäts- und Schubmoduln in $\text{MPa}$ (z.\,B. $E_1 = 165\,000\,\text{MPa}$ für UD oder $E_1 \approx E_2 = 25\,000\,\text{MPa}$ für Glasgewebe).
+        \item \texttt{N12}: Querkontraktionszahl $\nu_{12}$ [-] (typisch $0{,}25$ bis $0{,}30$ bei Faserverbunden).
+        \item \texttt{Xt}, \texttt{Xc}, \texttt{Yt}, \texttt{Yc}, \texttt{S12}: Zug-, Druck- und Schubfestigkeiten in $\text{MPa}$ für die Hashin-Versagensanalyse.
+        \item \texttt{Kurzname}: Ein eindeutiger, leicht zu merkender Token (z.\,B. \texttt{im7}, \texttt{glas}, \texttt{t10}). \textit{Wichtig: Keine Zahlen als Präfix wählen, da Zahlen im Layup als Faserwinkel interpretiert werden!}
+        \item \texttt{Dicke}: Nominale Einzellagendicke $t_{\text{ply}}$ in $\text{mm}$ (z.\,B. $0{,}20$).
+        \item \texttt{Dichte}: Dichte $\rho$ in $\text{t/mm}^3$ ($\text{g/cm}^3 \times 10^{-9}$, z.\,B. \texttt{1.52E-9} für $1{,}52\,\text{g/cm}^3$).
+    \end{itemize}
+
+    \item \textbf{Für ein neues Kernmaterial (z.\,B. Rohacell, Nomex, PVC-Schaum, Aluwabe):}
+    \begin{itemize}
+        \item \texttt{Name}: Kernbezeichnung (z.\,B. \texttt{Rohacell 51 IG} oder \texttt{Nomex 48}).
+        \item \texttt{G13}, \texttt{G23}: Schubmodul des Kerns in $\text{MPa}$ (bei isotropem Schaum $G_{13} = G_{23} \approx 19\,\text{MPa}$; bei Wabenkernen Längs- und Querschubmodul).
+        \item \texttt{S12}: Zulässige Kernschubfestigkeit $\tau_{\text{core,max}}$ in $\text{MPa}$ (z.\,B. $0{,}8\,\text{MPa}$ für Rohacell oder $2{,}4\,\text{MPa}$ für Wabe).
+        \item \texttt{Kurzname}: Eindeutiges Kürzel (z.\,B. \texttt{rohacell}, \texttt{nomex}, \texttt{foam}).
+        \item \texttt{Dichte}: Kerndichte in $\text{t/mm}^3$ (z.\,B. \texttt{5.1E-11} für $51\,\text{kg/m}^3$).
+    \end{itemize}
+\end{enumerate}
+
+\subsection*{Schritt 3: Speichern \& automatischer Reload}
+Speichere die Datei in Excel ab. Dank der integrierten Dateizeitstempel-Erkennung in \texttt{load\_materials.m} registriert MATLAB die Änderung auf Dateiebene sofort: Beim nächsten Klick auf \texttt{Calculate\_Single\_Panel.m} oder \texttt{Benchmark\_Panels.m} wird die Materialdatenbank ohne manuelle Befehle oder Neustarts im Hintergrund aktualisiert.
+
+\subsection*{Schritt 4: Verwendung im Lagenaufbau (Scenario.layup)}
+Das neue Material bzw. der neue Kern steht sofort in der Layup-Syntax zur Verfügung:
+\begin{itemize}
+    \item \textbf{Faserlage}: \texttt{[Winkel][Kurzname]}, z.\,B. \texttt{0im7}, \texttt{45glas}, \texttt{-21t10}.
+    \item \textbf{Kern}: \texttt{[Dicke][Kurzname]}, z.\,B. \texttt{15rohacell}, \texttt{20nomex}, \texttt{18core} (oder \texttt{18corew} für Kernschub in Querrichtung).
+\end{itemize}
+
+\begin{lstlisting}[style=vscodeLightMatlab]
+% Beispiel in 01_Functions/Scenariodata.m:
+Scenario.layup = '45glas/0im7/cp/15rohacell/sym';
+% Ergibt nach Aufloesung der Symmetrie:
+% 45glas / 0im7 / cp / 15rohacell / cp / 0im7 / 45glas
+\end{lstlisting}
+
+\begin{tcolorbox}[colback=infobg,colframe=infoblue,arc=2mm,title=\textbf{Automatisierte Parser-Intelligenz}]
+\begin{itemize}
+    \item \textbf{Gewebeerkennung bei Symmetrie}: Enthält der Name das Wort "`Fabric"' oder "`Gewebe"' bzw. gilt $E_1 \approx E_2$, stuft der Parser die Lage automatisch als Gewebe ein. $45^\circ$-Gewebe behalten bei der Spiegelsymmetrie (\texttt{sym}) ihren Winkel $+45^\circ$, während \abk{UD}-Lagen winkelgespiegelt werden ($+21^\circ \to -21^\circ$).
+    \item \textbf{Dynamische Panelmasse \& Schubsteifigkeit}: Das Panelgewicht und die Timoshenko-Kernschubverzerrung nach \abk{ASTM} C393 werden auf Basis der realen Dichte und des Schubmoduls des definierten Kerns berechnet.
+\end{itemize}
+\end{tcolorbox}

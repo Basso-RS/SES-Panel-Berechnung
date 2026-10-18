@@ -42,6 +42,36 @@ if ~isfield(OptSettings, 'material_pool'), OptSettings.material_pool = 'all'; en
 if ~isfield(OptSettings, 'core_interface_fabric'), OptSettings.core_interface_fabric = true; end
 if ~isfield(OptSettings, 'verbose'),       OptSettings.verbose = true; end
 
+% Kerndicken für Optimierung
+if ~isfield(OptSettings, 'core_thicknesses') || isempty(OptSettings.core_thicknesses)
+    if isfield(OptSettings, 'allowed_core_t') && ~isempty(OptSettings.allowed_core_t)
+        OptSettings.core_thicknesses = OptSettings.allowed_core_t;
+    elseif isfield(OptSettings, 'core_t') && ~isempty(OptSettings.core_t)
+        OptSettings.core_thicknesses = OptSettings.core_t;
+    elseif isfield(Scenario, 'core_t') && ~isempty(Scenario.core_t)
+        OptSettings.core_thicknesses = Scenario.core_t;
+    else
+        OptSettings.core_thicknesses = 18;
+    end
+end
+OptSettings.core_thicknesses = reshape(double(OptSettings.core_thicknesses), 1, []);
+
+% Kernmaterialien für Optimierung
+if ~isfield(OptSettings, 'core_materials') || isempty(OptSettings.core_materials)
+    if isfield(OptSettings, 'allowed_core_materials') && ~isempty(OptSettings.allowed_core_materials)
+        OptSettings.core_materials = OptSettings.allowed_core_materials;
+    elseif isfield(OptSettings, 'core_mat') && ~isempty(OptSettings.core_mat)
+        OptSettings.core_materials = OptSettings.core_mat;
+    elseif isfield(Scenario, 'core_mat') && ~isempty(Scenario.core_mat)
+        OptSettings.core_materials = cellstr(Scenario.core_mat);
+    else
+        OptSettings.core_materials = {'core'};
+    end
+end
+if ischar(OptSettings.core_materials) || isstring(OptSettings.core_materials)
+    OptSettings.core_materials = cellstr(OptSettings.core_materials);
+end
+
 % Sichtlagen-Option
 if ~isfield(OptSettings, 'sichtlage_active')
     if isfield(OptSettings, 'sichtlage') && isfield(OptSettings.sichtlage, 'active')
@@ -78,6 +108,10 @@ if ~isfield(OptSettings, 'sichtlage_angle')
     end
 end
 
+if ~isfield(OptSettings, 'unique_recipes')
+    OptSettings.unique_recipes = true;
+end
+
 this_dir = fileparts(mfilename('fullpath'));
 project_root = fileparts(this_dir);
 csv_path = fullfile(project_root, '02_Data', 'materials.csv');
@@ -85,7 +119,44 @@ csv_path = fullfile(project_root, '02_Data', 'materials.csv');
 %% 1. Materialdaten über Singleton-Loader laden
 [mat_dict, ~, ~] = load_materials(csv_path);
 
-panel_area_m2 = (Scenario.panel.b * Scenario.panel.l) / 1e6;
+if any(strcmpi(OptSettings.core_materials, 'all'))
+    core_fnames = fieldnames(mat_dict);
+    detected_cores = {};
+    seen_names = {};
+    for cf = 1:length(core_fnames)
+        fn = core_fnames{cf};
+        if isfield(mat_dict.(fn), 'is_core') && mat_dict.(fn).is_core
+            real_name = mat_dict.(fn).Name;
+            if ~ismember(real_name, seen_names)
+                seen_names{end+1} = real_name; %#ok<AGROW>
+                detected_cores{end+1} = fn; %#ok<AGROW>
+            end
+        end
+    end
+    if ~isempty(detected_cores)
+        OptSettings.core_materials = detected_cores;
+    else
+        OptSettings.core_materials = {'core'};
+    end
+end
+
+if isfield(Scenario.panel, 'l_real') && ~isempty(Scenario.panel.l_real)
+    panel_l_real = Scenario.panel.l_real;
+elseif isfield(Scenario.panel, 'l') && Scenario.panel.l > 400
+    panel_l_real = Scenario.panel.l;
+else
+    panel_l_real = 500;
+end
+
+if isfield(Scenario.panel, 'span') && ~isempty(Scenario.panel.span)
+    panel_span = Scenario.panel.span;
+elseif isfield(Scenario.panel, 'l')
+    panel_span = Scenario.panel.l;
+else
+    panel_span = 400;
+end
+
+panel_area_m2 = (Scenario.panel.b * panel_l_real) / 1e6;
 core_rho = 7.5e-11;
 if isfield(mat_dict, 'core'), core_rho = mat_dict.core.rho; end
 
@@ -127,6 +198,9 @@ Baseline.mass_panel = BaseWeight.mass_panel;
 Baseline.mass_skins = BaseWeight.mass_skins;
 Baseline.mass_core  = BaseWeight.mass_core;
 Baseline.mass_cp    = BaseWeight.mass_cp;
+Baseline.core_t     = BaseMdata.core.t;
+Baseline.core_name  = BaseMdata.core.name;
+if isfield(BaseMdata.core, 'mat'), Baseline.core_mat = BaseMdata.core.mat; else, Baseline.core_mat = 'core'; end
 Baseline.Curve      = BaseCurve;
 
 %% 3. Generierung aller regelkonformen Kandidaten (ohne dynamisches Zellwachstum)
@@ -173,7 +247,10 @@ all_candidates = all_candidates(sort_idx);
 cand_weights = cand_weights(sort_idx);
 
 %% 5. Hierarchische Optimierungsschleife (preallokierte Liste)
-feasible_list = cell(1, n_total);
+core_t_list   = OptSettings.core_thicknesses;
+core_mat_list = OptSettings.core_materials;
+n_combos = n_total * length(core_t_list) * length(core_mat_list);
+feasible_list = cell(1, n_combos);
 n_feas = 0;
 best_weight = inf;
 t_opt_start = tic;
@@ -191,96 +268,116 @@ for i = 1:n_total
     skin_str = all_candidates{i};
     skin_gsm = cand_weights(i);
     
-    if n_feas >= 5 && skin_gsm > (1.15 * best_weight)
-        continue;
-    end
-    
     parts = strsplit(skin_str, '/');
     rev_parts = fliplr(parts);
-    full_layup = [skin_str, '/cp/', num2str(Scenario.core_t), 'core/cp/', strjoin(rev_parts, '/')];
     
-    % Stufe 1: Schnelle KLT-Abschätzung
-    t_factor = 0.95;
-    if isfield(Calib, 'thickness_factor'), t_factor = Calib.thickness_factor; end
-    
-    cfk_props = calc_cfk_properties(full_layup, csv_path, false, t_factor, 0.00262);
-    
-    if Targets.t_skin_max > 0 && cfk_props.t_top > Targets.t_skin_max
-        continue;
-    end
-    if e_target > 0 && cfk_props.E_top < e_target
-        continue;
-    end
-    
-    z_top = Scenario.core_t/2 + cfk_props.t_top/2;
-    I_eigen = (Scenario.panel.b * cfk_props.t_top^3) / 12;
-    I_steiner = Scenario.panel.b * cfk_props.t_top * z_top^2;
-    I_skin = 2 * (I_eigen + I_steiner);
-    EI_approx = cfk_props.E_top * I_skin;
-    
-    if ei_target > 0 && EI_approx < ei_target
-        continue;
-    end
-    
-    grad_approx = 48 * EI_approx / (Scenario.panel.l^3);
-    
-    if grad_target > 0 && grad_approx < (grad_target * 0.92)
-        continue;
-    end
-    
-    count_stg1_passed = count_stg1_passed + 1;
-    
-    % Stufe 2: Vollständige Simulation
-    Scen_cand = Scenario;
-    Scen_cand.layup = full_layup;
-    Mdata = Materialdata(Scen_cand, Calib);
-    Results = struct();
-    Results = EI_calc(Mdata, Results, Scen_cand);
-    Results = Shearstiff_calc(Results, Mdata, Scen_cand);
-    [Results, Curve] = Deflection(Results, Scen_cand, Mdata);
-    Results = Energy_calc(Results, Curve, Scen_cand, Mdata);
-    count_stg2_sims = count_stg2_sims + 1;
-    
-    if grad_target > 0 && Results.Gradient < grad_target, continue; end
-    if ei_target > 0 && Results.EI < ei_target, continue; end
-    if energy_target > 0 && Results.Energy < energy_target, continue; end
-    if uts_target > 0 && Results.UTS < uts_target, continue; end
-    if e_target > 0 && Results.E < e_target, continue; end
-    if fmax_target > 0 && Results.F_max < fmax_target, continue; end
-    
-    cand_gsm_core = Scenario.core_t * core_rho * 1e12;
-    cand_gsm_cp   = 2 * gsm_cp_single;
-    cand_gsm_skins = 2 * skin_gsm;
-    cand_gsm_total = cand_gsm_skins + cand_gsm_core + cand_gsm_cp;
-    cand_panel_mass = cand_gsm_total * panel_area_m2;
-    
-    entry = struct();
-    entry.layup      = full_layup;
-    entry.top_skin   = skin_str;
-    entry.n_plies    = length(parts);
-    entry.gsm_skin   = skin_gsm;
-    entry.gsm_skins  = cand_gsm_skins;
-    entry.gsm_core   = cand_gsm_core;
-    entry.gsm_cp     = cand_gsm_cp;
-    entry.gsm_total  = cand_gsm_total;
-    entry.mass_panel = cand_panel_mass;
-    entry.weight_saving_g   = Baseline.mass_panel - cand_panel_mass;
-    entry.weight_saving_pct = (Baseline.mass_panel - cand_panel_mass) / Baseline.mass_panel * 100;
-    entry.E          = Results.E;
-    entry.UTS        = Results.UTS;
-    entry.Gradient   = Results.Gradient;
-    entry.Energy     = Results.Energy;
-    entry.EI         = Results.EI;
-    entry.F_max      = Results.F_max;
-    entry.w_max      = Results.w_max;
-    entry.t_top      = Mdata.cfk.t_top;
-    entry.t_total    = Mdata.cfk.t_top + Mdata.core.t + Mdata.cfk.t_lower;
-    entry.Curve      = Curve;
-    
-    n_feas = n_feas + 1;
-    feasible_list{n_feas} = entry;
-    if skin_gsm < best_weight
-        best_weight = skin_gsm;
+    for cm = 1:length(core_mat_list)
+        c_mat = core_mat_list{cm};
+        c_rho = 7.5e-11;
+        if isfield(mat_dict, c_mat) && isfield(mat_dict.(c_mat), 'rho')
+            c_rho = mat_dict.(c_mat).rho;
+        end
+        
+        for ct = 1:length(core_t_list)
+            c_thick = core_t_list(ct);
+            
+            if strcmpi(c_mat, 'core')
+                core_tok = sprintf('%.0fcore', c_thick);
+            else
+                core_tok = sprintf('%.0f%s', c_thick, c_mat);
+            end
+            
+            full_layup = [skin_str, '/cp/', core_tok, '/cp/', strjoin(rev_parts, '/')];
+            
+            % Stufe 1: Schnelle KLT-Abschätzung
+            t_factor = 0.95;
+            if isfield(Calib, 'thickness_factor'), t_factor = Calib.thickness_factor; end
+            
+            cfk_props = calc_cfk_properties(full_layup, csv_path, false, t_factor, 0.00262);
+            
+            if Targets.t_skin_max > 0 && cfk_props.t_top > Targets.t_skin_max
+                continue;
+            end
+            if e_target > 0 && cfk_props.E_top < e_target
+                continue;
+            end
+            
+            z_top = c_thick/2 + cfk_props.t_top/2;
+            I_eigen = (Scenario.panel.b * cfk_props.t_top^3) / 12;
+            I_steiner = Scenario.panel.b * cfk_props.t_top * z_top^2;
+            I_skin = 2 * (I_eigen + I_steiner);
+            EI_approx = cfk_props.E_top * I_skin;
+            
+            if ei_target > 0 && EI_approx < ei_target
+                continue;
+            end
+            
+            grad_approx = 48 * EI_approx / (panel_span^3);
+            
+            if grad_target > 0 && grad_approx < (grad_target * 0.92)
+                continue;
+            end
+            
+            count_stg1_passed = count_stg1_passed + 1;
+            
+            % Stufe 2: Vollständige Simulation
+            Scen_cand = Scenario;
+            Scen_cand.layup    = full_layup;
+            Scen_cand.core_t   = c_thick;
+            Scen_cand.core_mat = c_mat;
+            Mdata = Materialdata(Scen_cand, Calib);
+            Results = struct();
+            Results = EI_calc(Mdata, Results, Scen_cand);
+            Results = Shearstiff_calc(Results, Mdata, Scen_cand);
+            [Results, Curve] = Deflection(Results, Scen_cand, Mdata);
+            Results = Energy_calc(Results, Curve, Scen_cand, Mdata);
+            count_stg2_sims = count_stg2_sims + 1;
+            
+            if grad_target > 0 && Results.Gradient < grad_target, continue; end
+            if ei_target > 0 && Results.EI < ei_target, continue; end
+            if energy_target > 0 && Results.Energy < energy_target, continue; end
+            if uts_target > 0 && Results.UTS < uts_target, continue; end
+            if e_target > 0 && Results.E < e_target, continue; end
+            if fmax_target > 0 && Results.F_max < fmax_target, continue; end
+            
+            cand_gsm_core = c_thick * c_rho * 1e12;
+            cand_gsm_cp   = 2 * gsm_cp_single;
+            cand_gsm_skins = 2 * skin_gsm;
+            cand_gsm_total = cand_gsm_skins + cand_gsm_core + cand_gsm_cp;
+            cand_panel_mass = cand_gsm_total * panel_area_m2;
+            
+            entry = struct();
+            entry.layup      = full_layup;
+            entry.top_skin   = skin_str;
+            entry.core_t     = c_thick;
+            entry.core_mat   = c_mat;
+            entry.core_name  = Mdata.core.name;
+            entry.n_plies    = length(parts);
+            entry.gsm_skin   = skin_gsm;
+            entry.gsm_skins  = cand_gsm_skins;
+            entry.gsm_core   = cand_gsm_core;
+            entry.gsm_cp     = cand_gsm_cp;
+            entry.gsm_total  = cand_gsm_total;
+            entry.mass_panel = cand_panel_mass;
+            entry.weight_saving_g   = Baseline.mass_panel - cand_panel_mass;
+            entry.weight_saving_pct = (Baseline.mass_panel - cand_panel_mass) / Baseline.mass_panel * 100;
+            entry.E          = Results.E;
+            entry.UTS        = Results.UTS;
+            entry.Gradient   = Results.Gradient;
+            entry.Energy     = Results.Energy;
+            entry.EI         = Results.EI;
+            entry.F_max      = Results.F_max;
+            entry.w_max      = Results.w_max;
+            entry.t_top      = Mdata.cfk.t_top;
+            entry.t_total    = Mdata.cfk.t_top + Mdata.core.t + Mdata.cfk.t_lower;
+            entry.Curve      = Curve;
+            
+            n_feas = n_feas + 1;
+            feasible_list{n_feas} = entry;
+            if skin_gsm < best_weight
+                best_weight = skin_gsm;
+            end
+        end
     end
 end
 
@@ -301,9 +398,35 @@ masses = cellfun(@(x) x.mass_panel, feasible_list);
 [~, idx_rank] = sort(masses, 'ascend');
 feasible_list = feasible_list(idx_rank);
 
-Best = feasible_list{1};
-n_top = min(5, length(feasible_list));
-TopList = [feasible_list{1:n_top}];
+if OptSettings.unique_recipes
+    unique_keys = {};
+    recipe_candidates = {};
+    recipe_scores = [];
+    
+    for i = 1:length(feasible_list)
+        cand = feasible_list{i};
+        [r_key, r_score] = get_recipe_info(cand);
+        
+        match_idx = find(strcmp(unique_keys, r_key), 1);
+        if isempty(match_idx)
+            unique_keys{end+1} = r_key; %#ok<AGROW>
+            recipe_candidates{end+1} = cand; %#ok<AGROW>
+            recipe_scores(end+1) = r_score; %#ok<AGROW>
+        else
+            if r_score > recipe_scores(match_idx)
+                recipe_candidates{match_idx} = cand;
+                recipe_scores(match_idx) = r_score;
+            end
+        end
+    end
+    ranked_list = recipe_candidates;
+else
+    ranked_list = feasible_list;
+end
+
+Best = ranked_list{1};
+n_top = min(5, length(ranked_list));
+TopList = [ranked_list{1:n_top}];
 
 if OptSettings.verbose
     fprintf('Optimierung abgeschlossen in %.2f s! (%d Stufe-1 Prüfungen, %d FE-Simulationen)\n\n', ...
@@ -708,6 +831,22 @@ if nargin >= 5 && isfield(OptSettings, 'sichtlage_active')
         fprintf('  - Sichtlage:       OFF (freie Materialoptimierung)\n');
     end
 end
+if nargin >= 5 && isfield(OptSettings, 'core_thicknesses')
+    fprintf('  - Kerndicken:      %s mm\n', mat2str(OptSettings.core_thicknesses));
+    if iscell(OptSettings.core_materials) || isstring(OptSettings.core_materials)
+        core_disp = upper(strjoin(cellstr(OptSettings.core_materials), ', '));
+    else
+        core_disp = upper(char(string(OptSettings.core_materials)));
+    end
+    fprintf('  - Kernmaterial:    %s\n', core_disp);
+end
+if nargin >= 5 && isfield(OptSettings, 'unique_recipes')
+    if OptSettings.unique_recipes
+        fprintf('  - Rezept-Filter:   ON  (nur einzigartige Materialrezepte in Top-5)\n');
+    else
+        fprintf('  - Rezept-Filter:   OFF (alle Permutationen anzeigen)\n');
+    end
+end
 fprintf('----------------------------------------------------------------------------------------------------\n');
 
 Best = TopList(1);
@@ -717,6 +856,7 @@ fprintf('VORHER / NACHHER VERGLEICH:\n');
 fprintf('  %-26s | %-28s | %-28s | %-10s\n', 'Eigenschaft', 'Ausgangspanel (Baseline)', 'Optimum (Leichtestes)', 'Delta');
 fprintf('  %s\n', repmat('-', 1, 98));
 fprintf('  %-26s | %-28s | %-28s | \n', 'Voll-Lagenaufbau (mit CP)', Base.layup(1:min(28, length(Base.layup))), Best.layup);
+fprintf('  %-26s | %-28s | %-28s | \n', 'Kern (Dicke / Typ)', sprintf('%.0f mm (%s)', Base.core_t, Base.core_name), sprintf('%.0f mm (%s)', Best.core_t, Best.core_name));
 fprintf('  %-26s | %8.1f g                 | %8.1f g                 | %+6.1f%% (%+5.1f g)\n', ...
     'Panel-Gesamtmasse', Base.mass_panel, Best.mass_panel, delta_mass_pct, delta_mass_g);
 fprintf('  %-26s | %8.0f g/m^2             | %8.0f g/m^2             | %+6.1f%%\n', ...
@@ -724,7 +864,7 @@ fprintf('  %-26s | %8.0f g/m^2             | %8.0f g/m^2             | %+6.1f%%\
 fprintf('  %-26s | %8.0f g/m^2             | %8.0f g/m^2             | %+6.1f%%\n', ...
     '  -> CFK-Deckhäute (2x)', Base.gsm_skins, Best.gsm_skins, (Best.gsm_skins - Base.gsm_skins)/Base.gsm_skins*100);
 fprintf('  %-26s | %8.0f g/m^2             | %8.0f g/m^2             | %+6.1f%%\n', ...
-    '  -> Wabenkern (18 mm)', Base.gsm_core, Best.gsm_core, 0.0);
+    '  -> Kern (Flächengew.)', Base.gsm_core, Best.gsm_core, (Best.gsm_core - Base.gsm_core)/Base.gsm_core*100);
 fprintf('  %-26s | %8.0f g/m^2             | %8.0f g/m^2             | %+6.1f%%\n', ...
     '  -> Klebefilm (2x CP)', Base.gsm_cp, Best.gsm_cp, 0.0);
 fprintf('  %-26s | %8.2f mm                | %8.2f mm                | %+6.2f mm\n', ...
@@ -739,17 +879,44 @@ fprintf('  %-26s | %8.1f MPa               | %8.1f MPa               | %+6.1f%%\
     'Bruchspannung (UTS)', Base.UTS, Best.UTS, (Best.UTS - Base.UTS)/Base.UTS*100);
 fprintf('----------------------------------------------------------------------------------------------------\n\n');
 
-fprintf('TOP-%d LEICHTESTE REGELKONFORME LAMINATE:\n', length(TopList));
-fprintf('%-4s | %-8s | %-12s | %-8s | %-11s | %-9s | %s\n', ...
-    'Rang', 'Masse', 'Gesamt-GSM', 'Delta', 'Gradient', 'Energie', 'Lagenaufbau (Halbschale)');
-fprintf('%-4s | %-8s | %-12s | %-8s | %-11s | %-9s | %s\n', ...
-    '', '[g]', '[g/m^2]', '[%]', '[N/mm]', '[J]', '');
-fprintf('%s\n', repmat('-', 1, 100));
+if nargin >= 5 && isfield(OptSettings, 'unique_recipes') && OptSettings.unique_recipes
+    fprintf('TOP-%d LEICHTESTE REGELKONFORME LAMINATE (EINZIGARTIGE REZEPTE):\n', length(TopList));
+else
+    fprintf('TOP-%d LEICHTESTE REGELKONFORME LAMINATE:\n', length(TopList));
+end
+fprintf('%-4s | %-8s | %-12s | %-8s | %-11s | %-9s | %-13s | %s\n', ...
+    'Rang', 'Masse', 'Gesamt-GSM', 'Delta', 'Gradient', 'Energie', 'Kern', 'Lagenaufbau (Halbschale)');
+fprintf('%-4s | %-8s | %-12s | %-8s | %-11s | %-9s | %-13s | %s\n', ...
+    '', '[g]', '[g/m^2]', '[%]', '[N/mm]', '[J]', '[Dicke/Typ]', '');
+fprintf('%s\n', repmat('-', 1, 105));
 for r = 1:length(TopList)
     cand = TopList(r);
     cand_delta_pct = ((cand.mass_panel - Base.mass_panel) / Base.mass_panel) * 100;
-    fprintf('#%-3d | %6.1f g | %6.0f g/m^2 | %+6.1f%% | %5.0f N/mm | %5.1f J   | %s\n', ...
-        r, cand.mass_panel, cand.gsm_total, cand_delta_pct, cand.Gradient, cand.Energy, cand.top_skin);
+    core_display = sprintf('%.0fmm %s', cand.core_t, cand.core_mat);
+    fprintf('#%-3d | %6.1f g | %6.0f g/m^2 | %+6.1f%% | %5.0f N/mm | %5.1f J   | %-13s | %s\n', ...
+        r, cand.mass_panel, cand.gsm_total, cand_delta_pct, cand.Gradient, cand.Energy, core_display, cand.top_skin);
 end
 fprintf('====================================================================================================\n\n');
+end
+
+function [key, stacking_score] = get_recipe_info(cand)
+% Bestimmt einen eindeutigen Rezept-Schlüssel für Materialzusammensetzung + Kern
+% und berechnet einen Score für die Stacking Sequence (0°-Lagen weiter außen = höher).
+parts = strsplit(cand.top_skin, '/');
+n_p = length(parts);
+
+% Alphabetisch sortierte Lagenliste (ignoriert Permutations-Reihenfolge)
+sorted_parts = sort(parts);
+key = sprintf('%s|%.1f|%s', strjoin(sorted_parts, '/'), cand.core_t, cand.core_mat);
+
+% Stacking Score: Bevorzuge 0°-Lagen nahe der Deckhaut-Außenseite (niedriger Index)
+stacking_score = 0;
+for idx = 1:n_p
+    p = parts{idx};
+    if p(1) == '0'  % 0°-Lage
+        stacking_score = stacking_score + (n_p - idx + 1) * 10;
+    elseif contains(p, '21') || contains(p, '30')
+        stacking_score = stacking_score + (n_p - idx + 1);
+    end
+end
 end

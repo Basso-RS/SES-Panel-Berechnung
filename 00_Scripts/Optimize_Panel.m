@@ -25,8 +25,11 @@ OptSettings.min_plies              = 4;           % Mindestanzahl Lagen
 OptSettings.max_plies              = 8;           % Maximalanzahl Lagen
 OptSettings.angle_mode             = 'simple';    % 'simple' ([0, +/-21, 45]) oder 'advanced'
 OptSettings.material_pool          = 'all';       % 'all' oder 'standard'
+OptSettings.core_thicknesses       = [10, 20];    % Erlaubte Kerndicken [mm] (z.B. [10, 20] oder 20)
+OptSettings.core_materials         = {'core'};    % Erlaubte Kernmaterialien (z.B. {'core'}, {'core', 'rohacell'}, oder 'all')
+OptSettings.unique_recipes         = true;        % Nur einzigartige Materialrezepte in Top-5 anzeigen (Permutationen filtern)
 OptSettings.sichtlage_active       = true;        % Sichtlage aktiv
-OptSettings.sichtlage_material     = {'t7'}; % Erlaubte Sichtlagen-Materialien
+OptSettings.sichtlage_material     = {'t7'};      % Erlaubte Sichtlagen-Materialien
 OptSettings.sichtlage_angle        = 45;          % Winkel der Sichtlage [Grad]
 OptSettings.core_interface_fabric  = true;        % Gewebelage am Kern
 OptSettings.plot_curve             = true;        % Vergleichsplot erzeugen
@@ -56,8 +59,8 @@ if OptSettings.plot_curve && ~isempty(Best) && isfield(Best, 'Curve')
             Scenario.name, Baseline.mass_panel, Baseline.gsm_total, Baseline.Gradient, Baseline.Energy));
             
         plot(Best.Curve.w, Best.Curve.F / 1000, 'LineWidth', 2.5, 'Color', [0.1, 0.65, 0.25], ...
-            'DisplayName', sprintf('Optimum: #1 %s (%.1f g, %.0f g/m^2, %.0f N/mm, %.1f J)', ...
-            Best.top_skin, Best.mass_panel, Best.gsm_total, Best.Gradient, Best.Energy));
+            'DisplayName', sprintf('Optimum: #1 %s [%.0fmm %s] (%.1f g, %.0f g/m^2, %.0f N/mm, %.1f J)', ...
+            Best.top_skin, Best.core_t, Best.core_mat, Best.mass_panel, Best.gsm_total, Best.Gradient, Best.Energy));
             
         if isfield(Baseline, 'w_max') && isfield(Baseline, 'F_max')
             plot(Baseline.w_max, Baseline.F_max / 1000, 'ro', 'MarkerFaceColor', [0.75, 0.2, 0.2], 'MarkerSize', 8, ...

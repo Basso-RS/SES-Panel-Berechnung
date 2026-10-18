@@ -31,7 +31,7 @@ end
 [mat_dict, E_core, G_core] = load_materials(materials_csv_path);
 
 % 2. Lagenaufbau kanonisch parsen
-[top_parts, lower_parts, detected_core_t, detected_core_dir] = parse_layup(layup_str);
+[top_parts, lower_parts, detected_core_t, detected_core_dir, ~, ~, ~, detected_core_mat] = parse_layup(layup_str);
 
 % 3. Sublaminate berechnen
 [E_top, t_top, UTS_top] = calc_sublaminate(top_parts, mat_dict, calc_energy, E_core, G_core, t_factor, failure_strain, use_lpf);
@@ -55,6 +55,7 @@ cfk_props.UTS_lower = UTS_lower;
 cfk_props.UTS = UTS_top;
 cfk_props.core_t = detected_core_t;
 cfk_props.core_dir = detected_core_dir;
+cfk_props.core_mat = detected_core_mat;
 
 end
 

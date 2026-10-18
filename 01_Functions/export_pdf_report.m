@@ -1,5 +1,5 @@
 function pdf_path = export_pdf_report(varargin)
-% EXPORT_PDF_REPORT Speichert die Konsolenausgabe als DIN-A4 PDF im Downloads-Ordner.
+% EXPORT_PDF_REPORT Speichert die Konsolenausgabe als DIN-A4 PDF im Projektordner '06_Reports'.
 %
 % Unterstützte Aufruf-Formen:
 %   export_pdf_report(console_text, 'single', [Scenario], [output_dir])
@@ -7,9 +7,12 @@ function pdf_path = export_pdf_report(varargin)
 %   export_pdf_report('single', Results, Mdata, Scenario, Weight, [Curve], [output_dir])
 %   export_pdf_report('optimization', Baseline, Best, TopList, Targets, OptSettings, [output_dir])
 
-default_downloads = fullfile(getenv('USERPROFILE'), 'Downloads');
-if ~exist(default_downloads, 'dir')
-    default_downloads = pwd;
+this_dir = fileparts(mfilename('fullpath'));
+if isempty(this_dir), this_dir = pwd; end
+project_root = fileparts(this_dir);
+default_reports_dir = fullfile(project_root, '06_Reports');
+if ~exist(default_reports_dir, 'dir')
+    mkdir(default_reports_dir);
 end
 
 timestamp_str = datestr(now, 'yyyy-mm-dd_HHMMSS');
@@ -18,7 +21,7 @@ date_display  = datestr(now, 'dd.mm.yyyy, HH:MM:SS');
 % 1. Parameter parsen und Konsolentext ermitteln
 report_type = 'single';
 console_text = '';
-output_dir = default_downloads;
+output_dir = default_reports_dir;
 panel_label = 'Panel';
 
 if nargin >= 1 && (ischar(varargin{1}) || isstring(varargin{1}))

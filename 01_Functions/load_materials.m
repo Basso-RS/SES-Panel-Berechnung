@@ -13,9 +13,16 @@ if nargin < 2 || isempty(force_reload)
     force_reload = false;
 end
 
-persistent cached_dict cached_path cached_E cached_G
+persistent cached_dict cached_path cached_E cached_G cached_timestamp
 
-if ~force_reload && ~isempty(cached_dict) && strcmp(cached_path, materials_csv_path)
+file_info = dir(materials_csv_path);
+current_timestamp = 0;
+if ~isempty(file_info)
+    current_timestamp = file_info.datenum;
+end
+
+if ~force_reload && ~isempty(cached_dict) && strcmp(cached_path, materials_csv_path) && ...
+   current_timestamp > 0 && current_timestamp == cached_timestamp
     mat_dict = cached_dict;
     E_core   = cached_E;
     G_core   = cached_G;
@@ -80,6 +87,18 @@ for r = 1:height(mat_table)
     entry.Yc = Yc;
     entry.S  = S;
     
+    entry.G13 = mat_table.G13(r);
+    entry.G23 = mat_table.G23(r);
+    entry.E3  = mat_table.E3(r);
+    
+    is_core = contains(lower(entry.Name), {'core', 'wabe', 'foam', 'schaum', 'rohacell', 'nomex', 'honeycomb'}) || ...
+              strcmpi(kname, 'core') || (entry.E1 < 1000 && entry.rho < 5e-10);
+    entry.is_core = is_core;
+    entry.is_cp   = strcmpi(kname, 'cp') || contains(lower(entry.Name), {'coupling', 'klebefilm', 'film'});
+    entry.is_skin = ~entry.is_core && ~entry.is_cp;
+    entry.is_fabric = entry.is_skin && (contains(lower(entry.Name), {'fabric', 'gewebe', 'twill', 'leinwand'}) || ...
+                      (entry.E2 > 0 && abs(entry.E1 - entry.E2) / max(entry.E1, entry.E2) < 0.25));
+    
     cached_dict.(kname) = entry;
 end
 
@@ -136,6 +155,7 @@ if ~isempty(idx_core_mat)
 end
 
 cached_path = materials_csv_path;
+cached_timestamp = current_timestamp;
 mat_dict = cached_dict;
 E_core   = cached_E;
 G_core   = cached_G;

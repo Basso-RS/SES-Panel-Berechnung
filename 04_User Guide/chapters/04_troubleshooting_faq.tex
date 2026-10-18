@@ -31,13 +31,12 @@ Der Parser (\texttt{parse\_layup.m}) zerlegt den Lagenaufbau-String entlang der 
 Die Materialwerte werden zentral über die Datei \texttt{02\_Data/materials.csv} verwaltet. Beim Bearbeiten oder Hinzufügen von Datensätzen sind folgende Punkte zu beachten:
 
 \begin{itemize}
-    \item \textbf{Werteänderung in \hyperref[abk:CSV]{CSV} wird in MATLAB nicht übernommen}:
-    Die Funktion \texttt{load\_materials.m} nutzt aus Performancegründen einen internen \hyperref[abk:RAM]{RAM}-Cache. Wird die CSV-Datei extern in Excel oder einem Editor geändert, greift MATLAB weiterhin auf die im Speicher liegenden Altwerte zu. \par
-    \textit{Lösung}: Vor einem erneuten Rechenlauf den Speicher über das Command Window leeren:
+    \item \textbf{Automatischer Datei-Reload (Zeitstempel-Erkennung)}: \par
+    Die Funktion \texttt{load\_materials.m} überwacht den Dateizeitstempel von \texttt{materials.csv}. Sobald die Datei in Excel oder einem Editor gespeichert wird, registriert MATLAB dies automatisch und lädt die aktualisierten Kennwerte beim nächsten Rechenlauf ein. Ein manuelles \texttt{clear functions} ist im Normalfall nicht mehr erforderlich. \par
+    \textit{Notfall-Lösung}: Sollte das Dateisystem den Zeitstempel in Ausnahmefällen nicht aktualisieren, kann das Neuladen im Command Window erzwungen werden:
     \begin{lstlisting}[style=vscodeLightMatlab]
-    clear functions; % Leert den Material-Cache
+    load_materials([], true); % Erzwingt Neuladen der CSV-Daten
     \end{lstlisting}
-    Alternativ kann das Neuladen mit \texttt{load\_materials([], true)} erzwungen werden.
 
     \item \textbf{Falsches CSV-Trennzeichen}:
     Die Datei \texttt{materials.csv} muss zwingend mit Semikolon (\texttt{;}) als Spaltentrennzeichen gespeichert werden. Werden Kommata oder Tabulatoren verwendet, schlägt das Einlesen fehl (\texttt{detectImportOptions}).
@@ -76,8 +75,12 @@ Beim Ausführen des Skripts \texttt{00\_Scripts/Optimize\_Panel.m} können folge
     \begin{itemize}
         \item \textit{Sicherheitsfaktor zu hoch}: Bei aktivem Sicherheitsfaktor (z.\,B. \texttt{safety\_factor = 1.25}) steigen die Anforderungen um $25\,\%$.
         \item \textit{Lagenfenster zu eng}: Wenn \texttt{max\_plies = 6} gewählt ist, der geforderte Gradient aber mindestens 8 Lagen verlangt, existiert im gewählten Suchraum keine physikalisch machbare Lösung. \texttt{max\_plies} schrittweise anheben.
+        \item \textit{Kerndicken-Einschränkung}: Wurde in \texttt{OptSettings.core\_thicknesses} nur eine geringe Dicke (z.\,B. nur \texttt{10}) freigegeben, kann die geforderte Biegesteifigkeit unter Umständen nicht erreicht werden. Den Suchraum auf \texttt{[10, 18, 20]} erweitern.
         \item \textit{Widersprüchliche Randbedingungen}: Ein hoher Gradient in Kombination mit einer extrem strengen Dickenbegrenzung (\texttt{t\_skin\_max}) schließt alle tragfähigen Laminate aus.
     \end{itemize}
+
+    \item \textbf{Top-5 Liste enthält ähnliche Aufbauten}: \par
+    Steht \texttt{OptSettings.unique\_recipes} auf \texttt{false}, zeigt die Rangliste alle Permutationen desselben Lagenpakets. Setze \texttt{OptSettings.unique\_recipes = true;}, um nur strukturell und rezeptuell einzigartige Lösungen (verschiedene Materialien und Kerne) mit optimaler Außenlagen-Anordnung zu vergleichen.
 
     \item \textbf{Lange Rechenzeit bei der Optimierung}: \par
     Steht \texttt{angle\_mode} auf \texttt{'advanced'}, untersucht der Algorithmus sämtliche Winkelkombinationen aus $[21^\circ, 30^\circ, 45^\circ, 60^\circ]$. Dadurch wächst die Anzahl der Kandidaten exponentiell an. Für schnelle Iterationen immer \texttt{'simple'} nutzen.
@@ -90,7 +93,8 @@ Beim Ausführen des Skripts \texttt{00\_Scripts/Optimize\_Panel.m} können folge
     MATLAB findet die Funktionen nicht. \par
     \textit{Lösung}: Vor Arbeitsbeginn immer die Projektdatei \texttt{SES\_Panelberechnung.prj} im Hauptverzeichnis doppelklicken. Dadurch werden alle Unterordner (\texttt{00\_Scripts}, \texttt{01\_Functions}, \texttt{02\_Data}) automatisch dem MATLAB-Suchpfad hinzugefügt.
 
-    \item \textbf{PDF-Export schlägt fehl oder Datei wird nicht aktualisiert}:
-    Die Funktion \texttt{export\_pdf\_report.m} speichert Berichte standardmäßig im Ordner \texttt{Downloads}. Ist ein bereits erzeugter PDF-Bericht in einem externen PDF-Viewer (z.\,B. Adobe Acrobat) geöffnet, sperrt Windows die Datei gegen Überschreiben. \par
-    \textit{Lösung}: PDF-Viewer schließen oder das Dokument im Viewer freigeben.
+    \item \textbf{PDF-Export und Speicherort}: \par
+    Die Funktion \texttt{export\_pdf\_report.m} speichert alle generierten Berichte deterministisch im Projektunterordner \textbf{\texttt{06\_Reports/}}. Existiert der Ordner noch nicht, legt ihn MATLAB automatisch an. \par
+    \textit{Meldung bei Schreibschutz}: Ist ein bereits erzeugter PDF-Bericht in einem externen PDF-Viewer (z.\,B. Adobe Acrobat) geöffnet, sperrt Windows die Datei gegen Überschreiben. \par
+    \textit{Lösung}: Das Dokument im externen PDF-Viewer schließen oder einen neuen Rechenlauf mit aktuellem Zeitstempel starten.
 \end{itemize}

@@ -7,7 +7,7 @@ Dieses Verzeichnis enthält das offizielle Benutzerhandbuch zur MATLAB SES Panel
 ## 📄 Verfügbare Versionen
 
 1. **PDF-Handbuch (Druck- & Leseversion):**
-   - [`User_Guide_v1.0.pdf`](./User_Guide_v1.0.pdf) – Das fertig gesetzte Gesamtdokument mit formatierten Tabellen, Formeln und Schaubildern.
+   - [`User_Guide_v1.1.pdf`](./User_Guide_v1.1.pdf) – Das fertig gesetzte Gesamtdokument (Version 1.1) mit formatierten Tabellen, Formeln und Schaubildern.
 
 2. **Online- & Markdown-Version:**
    - [`README.md im Hauptverzeichnis`](../README.md) – Schnelle Navigation und interaktive Leseansicht direkt im Repository.
@@ -16,7 +16,7 @@ Dieses Verzeichnis enthält das offizielle Benutzerhandbuch zur MATLAB SES Panel
 
 ## 🛠️ LaTeX-Quellcode
 
-- **Hauptdokument:** `User_Guide.tex`
+- **Hauptdokument:** `User_Guide_v1.1.tex`
 - **Kapitel:** Ordner `chapters/`
   - `00_abkuerzungen.tex`
   - `01_erste_schritte_quickstart.tex`
@@ -29,6 +29,8 @@ Dieses Verzeichnis enthält das offizielle Benutzerhandbuch zur MATLAB SES Panel
 ### Kompilierungshinweis
 Zum Neukompilieren (z. B. mit `pdflatex` oder `latexmk`):
 ```bash
-latexmk -pdf User_Guide.tex
+pdflatex User_Guide_v1.1.tex
+# oder
+latexmk -pdf User_Guide_v1.1.tex
 ```
 *Hinweis: LaTeX-Build-Artefakte (`*.aux`, `*.log`, `*.toc` etc.) werden über die `.gitignore` automatisch ignoriert.*

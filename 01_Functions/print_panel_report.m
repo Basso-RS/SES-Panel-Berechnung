@@ -15,18 +15,36 @@ if isfield(Scenario, 'name') && ~isempty(Scenario.name)
     fprintf('  Panel / Szenario:         %s\n', Scenario.name);
 end
 fprintf('  Lagenaufbau:              %s\n', Scenario.layup);
-fprintf('  Prüfgeometrie:            L = %.0f mm, b = %.0f mm\n', ...
-    Scenario.panel.l, Scenario.panel.b);
+span_val = 400;
+if isfield(Scenario.panel, 'span') && ~isempty(Scenario.panel.span)
+    span_val = Scenario.panel.span;
+elseif isfield(Scenario.panel, 'l')
+    span_val = Scenario.panel.l;
+end
+
+l_real_val = 500;
+if isfield(Scenario.panel, 'l_real') && ~isempty(Scenario.panel.l_real)
+    l_real_val = Scenario.panel.l_real;
+elseif isfield(Weight, 'panel_l')
+    l_real_val = Weight.panel_l;
+end
+
+fprintf('  Prüfpanel-Maße:           %.0f x %.0f mm (Länge x Breite)\n', l_real_val, Scenario.panel.b);
+fprintf('  Prüfvorrichtung (SES):    Stützweite L = %.0f mm\n', span_val);
 fprintf('----------------------------------------------------------------------\n');
 fprintf('GEOMETRIE:\n');
 fprintf('  - Deckhautdicke oben:     %6.2f mm\n', Mdata.cfk.t_top);
 fprintf('  - Deckhautdicke unten:    %6.2f mm\n', Mdata.cfk.t_lower);
-fprintf('  - Kerndicke:              %6.2f mm  (Richtung: %s)\n', Mdata.core.t, Mdata.core.dir);
+core_name = 'Wabenkern';
+if isfield(Mdata, 'core') && isfield(Mdata.core, 'name') && ~isempty(Mdata.core.name)
+    core_name = Mdata.core.name;
+end
+fprintf('  - Kerndicke:              %6.2f mm  (Material: %s, Richtung: %s)\n', Mdata.core.t, core_name, Mdata.core.dir);
 fprintf('  - Gesamtdicke:            %6.2f mm\n', Mdata.cfk.t_top + Mdata.core.t + Mdata.cfk.t_lower);
 fprintf('----------------------------------------------------------------------\n');
 fprintf('GEWICHT & FLÄCHENMASSE (PANEL):\n');
 fprintf('  - Panel-Gesamtgewicht:    %6.1f g      (SES Prüfpanel: %.0f x %.0f mm)\n', ...
-    Weight.mass_panel, Weight.panel_b, Weight.panel_l);
+    Weight.mass_panel, l_real_val, Scenario.panel.b);
 fprintf('  - Gesamt-Flächengewicht:  %6.0f g/m^2   (Sandwich inkl. Kern & beider Deckhäute)\n', ...
     Weight.gsm_total);
 if Weight.gsm_skins > 0
@@ -36,8 +54,8 @@ if Weight.gsm_skins > 0
     fprintf('       - Deckhaut unten:    %6.0f g/m^2   (%5.1f g)\n', Weight.gsm_lower, Weight.mass_lower);
 end
 if Weight.gsm_core > 0
-    fprintf('    -> Wabenkern (%.0f mm):   %6.0f g/m^2   (%5.1f g, %4.1f%%)\n', ...
-        Weight.core_t, Weight.gsm_core, Weight.mass_core, Weight.mass_core / Weight.mass_panel * 100);
+    fprintf('    -> Kern (%.0f mm, %s): %6.0f g/m^2   (%5.1f g, %4.1f%%)\n', ...
+        Weight.core_t, core_name, Weight.gsm_core, Weight.mass_core, Weight.mass_core / Weight.mass_panel * 100);
 end
 if Weight.gsm_cp > 0
     fprintf('    -> Klebefilm (%dx cp):   %6.0f g/m^2   (%5.1f g, %4.1f%%)\n', ...

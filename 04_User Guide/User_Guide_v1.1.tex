@@ -30,9 +30,11 @@
 % Farbdefinitionen für Links und Warnhinweise
 \definecolor{linknavy}{RGB}{0, 60, 130}
 
-% Box-Farben für Warnhinweise
+% Box-Farben für Warnhinweise und Infoboxen
 \definecolor{warnred}{RGB}{180, 40, 40}
 \definecolor{warnbg}{RGB}{253, 242, 242}
+\definecolor{infoblue}{RGB}{0, 90, 160}
+\definecolor{infobg}{RGB}{240, 247, 255}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Code Listings %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \usepackage{listings}
@@ -77,7 +79,7 @@
 \lstset{style=vscodeLightMatlab}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\newcommand{\DocVersion}{1.0}
+\newcommand{\DocVersion}{1.1}
 
 \usepackage{fancyhdr}
 \pagestyle{fancy}
@@ -108,7 +110,7 @@
             menucolor=black]{hyperref}
 
 \hypersetup{
-    pdftitle={SES Panel Calculation and Optimization Suite -- User Guide v1.0},
+    pdftitle={SES Panel Calculation and Optimization Suite -- User Guide v\DocVersion},
     pdfauthor={Formula Student Team -- Chassis and SES Department},
     pdfsubject={User Guide: SES Sandwich-Panel-Berechnung},
     pdfkeywords={Formula Student, SES, CFK, Sandwich, Wabe, 3-Punkt-Biegung, Optimierung}

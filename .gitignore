@@ -69,3 +69,7 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+# Generated calculation PDF reports
+06_Reports/*.pdf
+!06_Reports/.gitkeep

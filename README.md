@@ -1,6 +1,6 @@
-# SES Panel Calculation & Optimization Suite – User Guide (v1.0)
+# SES Panel Calculation & Optimization Suite – User Guide (v1.1)
 **Leitfaden für die Nutzung des Matlabskriptes**  
-*Formula Student Monocoque SES Auslegung (Saisons 2026 / 2027) | Version 1.0*
+*Formula Student Monocoque SES Auslegung (Saisons 2026 / 2027) | Version 1.1*
 
 ---
 
@@ -33,6 +33,7 @@
 * **[6. Referenz: Materialkatalog & FSG-Regeln](#6-referenz-materialkatalog--fsg-regeln)**
   * [6.1 Material-Datenbank & Kennwerte](#61-material-datenbank--kennwerte)
   * [6.2 Laminat-Regeln nach Formula Student (FSG T 3.5)](#62-laminat-regeln-nach-formula-student-fsg-t-35)
+  * [6.3 Anleitung: Neues Material oder neuen Kern hinzufügen (Plug & Play)](#63-anleitung-neues-material-oder-neuen-kern-hinzufügen-plug--play)
 
 ---
 
@@ -130,8 +131,8 @@ Scenario.panel.b     = 275;   % mm Panel-Breite
 Scenario.panel.l     = 400;   % mm Stützweite
 Scenario.panel.w     = 12.7;  % mm Max. Durchbiegung
 
-% Beispiel-Lagenaufbau (Baseline-Panel 26_20)
-Scenario.name   = '26_20';
+% Beispiel-Lagenaufbau (Baseline-Panel 26_16)
+Scenario.name   = '26_16';
 Scenario.core_t = 18;        % 18 mm Wabenkern
 Scenario.layup  = '45t7/0m/0m/0m/21m/45t7/cp/18core/cp/45t7/-21m/0m/0m/0m/45t7';
 ```
@@ -165,9 +166,9 @@ Calculate_Single_Panel
 #### Schritt 4: Ergebnisse einsehen
 Nach Abschluss der Berechnung (Rechenzeit typischerweise $< 0{,}1\text{ Sekunden}$):
 1. **Terminal-Report**: Im MATLAB Command Window erscheint eine detaillierte Zusammenfassung aller Steifigkeits-, Festigkeits- und Kennwerte.
-2. **Automatischer PDF-Prüfbericht**: Das Skript erzeugt automatisch einen DIN-A4-Prüfbericht und legt diesen mit Zeitstempel im persönlichen **`Downloads`**-Verzeichnis ab:
+2. **Automatischer PDF-Prüfbericht**: Das Skript erzeugt automatisch einen DIN-A4-Prüfbericht und legt diesen mit Zeitstempel im Projektordner **`06_Reports/`** ab:
    ```text
-   C:\Users\<Benutzer>\Downloads\SES_Report_Single_Panel_26_20_<Zeitstempel>.pdf
+   06_Reports/SES_Report_Single_Panel_26_16_<Zeitstempel>.pdf
    ```
 
 ---
@@ -182,7 +183,7 @@ Nachdem im Quick Start (Abschnitt 1.4) die grundlegende Geometrie und das Erstel
 
 1. **Symmetrische Kurzschreibweise (`sym`)**:
    * Ist die Unterseite exakt spiegelsymmetrisch zur Oberseite aufgebaut, kann nach dem Kern das Schlüsselwort `sym` gesetzt werden.
-   * Der Parser spiegelt automatisch alle Lagen vor dem Kern spiegelbildlich auf die Unterseite und kehrt dabei die Vorzeichen von Winkellagen automatisch um (z. B. $+21^\circ \to -21^\circ$).
+   * Der Parser spiegelt automatisch alle Lagen vor dem Kern spiegelbildlich auf die Unterseite und kehrt dabei die Vorzeichen von Winkellagen automatisch um (z. B. $+21^\circ \to -21^\circ$). Klebefilm `cp` wird beidseitig am Kern positioniert.
 
    ```matlab
    % Kompakte symmetrische Notation:
@@ -192,9 +193,10 @@ Nachdem im Quick Start (Abschnitt 1.4) die grundlegende Geometrie und das Erstel
    % '45t7/0m/21m/cp/18core/cp/-21m/0m/45t7'
    ```
 
-2. **Kernausrichtung L- vs. W-Richtung (`core` vs. `corew`)**:
+2. **Kernausrichtung & Beliebige Kerne (`core`, `corew`, `rohacell`, `nomex`)**:
    * **Standard (`18core`)**: Ribbon- bzw. L-Richtung parallel zur Längsachse ($G_L = 550\text{ MPa}$). Dies ist der Standard für maximale Tragfähigkeit.
    * **Querausrichtung (`18corew`)**: Einbau um $90^\circ$ gedreht (W-Richtung). Der Schubmodul sinkt auf $G_W = 230\text{ MPa}$, was zu spürbar höherer Schubverformung führt.
+   * **Beliebige Kernmaterialien**: Neben der Aluwabe können beliebige Kerne (z. B. `15rohacell`, `20nomex`) über `materials.csv` frei definiert und genutzt werden (siehe Schritt-für-Schritt-Anleitung in Abschnitt 6.3).
 
 3. **Vorrichtungsspiel & Setzweg (`panel.slack`)**:
    * In `Scenario.panel.slack = 0.0;` kann ein Setzweg der Prüfaufnahme in $\text{mm}$ hinterlegt werden.
@@ -220,14 +222,14 @@ In der Datei `01_Functions/Calibration.m` sind die zentralen Kalibrierungswerte 
 ```matlab
 % Auszug aus 01_Functions/Calibration.m:
 Calib.thickness_factor    = 0.95;   % Bauteildicke nach Aushärtung (95% Nenndicke, erhöht E-Modul um 1/0.95)
-Calib.core_dir            = 'L';    % Wabenkern-Richtung ('L' = Ribbon, 'W' = Quer)
+Calib.core_dir            = 'L';    % Wabenkern-Richtung ('L' = Ribbon, 'W' = Quer, Fallback)
 Calib.include_core_shear  = true;   % Kernschubverzerrung nach ASTM C393 Dreipunktbiegung (Timoshenko)
 Calib.fixture_stiffness   = 22218;  % [N/mm] Exakte SES Rig Compliance aus Steel-Tube-Kalibrierversuch
 Calib.post_fail_factor    = 0.250;  % Restkraftplateau nach Peak (F_post = F_max * factor)
 Calib.failure_criterion   = 'hashin';% 'hashin' oder 'fixed_strain'
 Calib.softening_factor    = 0.95;   % Sekanten-Softeningfaktor vor Peak
 Calib.indentation_depth   = 0.15;   % Lokale Rolleneindrückung [mm]
-Calib.energy_mode         = 'to_peak';% Energieberechnung ('to_peak' oder 'ses_total')
+Calib.energy_mode         = 'ses_total';% 'ses_total' (FS-Reglement bis 12.7 mm) | 'to_peak' (Abgleich bis F_max)
 ```
 
 #### Parameter im Detail für begründete Anpassungen:
@@ -247,8 +249,8 @@ Calib.energy_mode         = 'to_peak';% Energieberechnung ('to_peak' oder 'ses_t
   * `'fixed_strain'`: Einfacher Dehnungsnachweis bei Erreichen einer vorgegebenen Grenzdehnung.
 * **Nachbruchfaktor (`post_fail_factor`)**: Definiert das Restkraft-Niveau nach dem ersten Versagens-Peak ($F_{post} = F_{max} \cdot \text{factor}$). Dieser Wert wurde experimentell über alle Prüfstandsdaten der Saisons 2024–2027 kalibriert ($0{,}250 = 25\,\%$ Resttragfähigkeit).
 * **Energiemodus (`energy_mode`)**: Definiert das Integrationsintervall für die absorbierte Verformungsenergie:
-  * `'to_peak'`: Berechnet die Energieaufnahme bis zum ersten Faserbruch bei $F_{max}$. Wird genutzt, um die Berechnung 1:1 mit den realen Prüfstands-Messwerten aus `02_Data/Pruefstand_Rohdaten_Benchmark.xlsx` zu vergleichen.
   * `'ses_total'`: Vollständige Energieintegration über den gesamten Weg von $0$ bis $12{,}7\text{ mm}$ (inklusive Wabenstauchung nach dem Bruch). Wird für den offiziellen Formula Student SES-Nachweis zwingend gefordert.
+  * `'to_peak'`: Berechnet die Energieaufnahme bis zum ersten Faserbruch bei $F_{max}$. Wird genutzt, um die Berechnung 1:1 mit den realen Prüfstands-Messwerten aus `02_Data/Pruefstand_Rohdaten_Benchmark.xlsx` zu vergleichen.
 
 ---
 
@@ -267,7 +269,7 @@ Dieser Workflow dient der schnellen Berechnung und Überprüfung eines fest defi
 #### Auswertung des Terminal-Reports
 Die Berechnung wird in wenigen Millisekunden abgeschlossen. Im MATLAB Command Window wird ein detaillierter, in fünf Abschnitte gegliederter Prüfbericht ausgegeben:
 
-* **Geometrie**: Dicken der oberen und unteren Deckhaut, Kerndicke mit Orientierung (Ribbon `'L'` oder Quer `'W'`) sowie die Gesamtsandwichdicke.
+* **Geometrie**: Dicken der oberen und unteren Deckhaut, Kerndicke mit Material und Orientierung (Ribbon `'L'` oder Quer `'W'`) sowie die Gesamtsandwichdicke.
 * **Gewicht & Flächenmasse**: Gesamtmasse des $400 \times 275\text{ mm}$ Prüfkörpers in Gramm, gesamtes Flächengewicht in $\text{g/m}^2$ sowie die prozentualen Massenanteile der CFK-Deckhäute, des Wabenkerns und des Klebefilms (`cp`).
 * **Steifigkeit (Stiffness)**: Elastizitätsmodul der Deckschichten ($E$), äquivalente Biegesteifigkeit ($EI$), axiales Flächenträgheitsmoment ($I$) und der maßgebliche SES-Prüfstandsgradient in $\text{N/mm}$.
 * **Festigkeit & Versagen (Strength & Failure)**: Deckhaut-Bruchspannung ($UTS$), Maximalkraft ($F_{max}$), Versagensweg bei Maximalkraft ($w_{max}$) sowie der identifizierte primäre Versagensmodus.  
@@ -275,12 +277,12 @@ Die Berechnung wird in wenigen Millisekunden abgeschlossen. Im MATLAB Command Wi
   * *Deckhautbruch (UTS)*: Faserzug- oder Faserdruckversagen der Deckschichten. Durch das überwiegend linear-elastische Verhalten der Fasern bis zum Bruchpunkt weist die Energieberechnung hier die **höchste Linearität und Vertrauenswürdigkeit** auf.
   * *Kernschubbruch (Core Shear)*: Schubversagen der Aluminiumwaben bei hoher Querkraft. Plastische Verformungen der Zellwände vor dem Peak mindern die Linearität, wodurch die berechnete Energie moderaten Streuungen unterliegt.
   * *Deckhautknicken (Wrinkling)*: Lokales Stabilitätsversagen (Beulen) der Deckhaut über den Wabenkammern. Dieses plötzliche, geometrisch nichtlineare Versagen reagiert extrem sensibel auf Fertigungseinflüsse, weshalb der Energieberechnung hier **am wenigsten vertraut** werden kann.
-* **Energieaufnahme (Energy Absorption)**: Absorbierte Verformungsenergie in Joule ($J$) im gewählten Modus (`'to_peak'` für den direkten Prüfstandsabgleich oder `'ses_total'` für den SES-Regelwerksnachweis).
+* **Energieaufnahme (Energy Absorption)**: Absorbierte Verformungsenergie in Joule ($J$) im gewählten Modus (`'ses_total'` für den SES-Regelwerksnachweis bis $12{,}7\text{ mm}$ oder `'to_peak'` für den direkten Prüfstandsabgleich).
 
 #### Automatischer PDF-Prüfbericht
-Das Skript erzeugt automatisch einen DIN-A4-Prüfbericht und legt diesen mit Zeitstempel im persönlichen **`Downloads`**-Verzeichnis ab:
+Das Skript erzeugt automatisch einen DIN-A4-Prüfbericht und legt diesen mit Zeitstempel im Projektverzeichnis **`06_Reports/`** ab:
 ```text
-Downloads/SES_Report_Single_Panel_<Szenarioname>_<Zeitstempel>.pdf
+06_Reports/SES_Report_Single_Panel_<Szenarioname>_<Zeitstempel>.pdf
 ```
 Der Bericht fasst alle Kennwerte übersichtlich zusammen und eignet sich direkt zur Dokumentation für das SES-Submissionspaket oder die technische Abnahme (Scrutineering).
 
@@ -288,7 +290,7 @@ Der Bericht fasst alle Kennwerte übersichtlich zusammen und eignet sich direkt 
 
 ### 3.2 Workflow 2: Automatisierte Laminat-Optimierung (`Optimize_Panel.m`)
 
-Das Skript `00_Scripts/Optimize_Panel.m` führt eine mehrkriterielle Optimierung durch. Ziel ist es, aus allen regelkonformen Kombinationen von Fasermaterialien, Lagenanzahlen und Orientierungswinkeln das leichteste Sandwich-Laminat zu ermitteln, das alle geforderten Strukturkennwerte erfüllt.
+Das Skript `00_Scripts/Optimize_Panel.m` führt eine mehrkriterielle Optimierung durch. Ziel ist es, aus allen regelkonformen Kombinationen von Fasermaterialien, Lagenanzahlen, Orientierungswinkeln, Kerndicken und Kernwerkstoffen das leichteste Sandwich-Laminat zu ermitteln, das alle geforderten Strukturkennwerte erfüllt.
 
 #### Zielwerte definieren (`Targets`)
 Die Mindestanforderungen an das optimierte Panel werden direkt im Konfigurationsabschnitt von `Optimize_Panel.m` hinterlegt:
@@ -308,31 +310,42 @@ Targets.t_skin_max    = 0;      % Max. Deckhautdicke [mm]
 * **Sicherheitsfaktor (`safety_factor`)**: Skaliert alle aktivierten Mindest-Targets intern mit diesem Faktor (z. B. $1{,}10$ für $10\,\%$ Reserve: $3000\text{ N/mm} \cdot 1{,}10 = 3300\text{ N/mm}$).
 * **Inaktiv-Schalter (`0`)**: Jeder Zielwert mit dem Wert `0` wird vom Optimierungsalgorithmus ignoriert und stellt keine Restriktion dar.
 
-#### Fertigungs- & Regelwerksgrenzen (`OptSettings`)
-Zur Einhaltung von Fertigungsstandards und FSG-Vorgaben stehen folgende Optionen zur Verfügung:
+#### Fertigungs-, Kern- & Regelwerksgrenzen (`OptSettings`)
+Zur Einhaltung von Fertigungsstandards, FSG-Vorgaben und flexiblen Kernvarianten stehen folgende Optionen zur Verfügung:
 
 ```matlab
-OptSettings.min_plies             = 4;           % Mindestanzahl Lagen je Deckhaut
-OptSettings.max_plies             = 8;           % Maximalanzahl Lagen je Deckhaut
-OptSettings.angle_mode            = 'simple';    % 'simple' ([0, +/-21]) oder 'advanced'
-OptSettings.material_pool         = 'all';       % 'all' oder 'standard'
-OptSettings.sichtlage_active      = true;        % FSG-Sichtlage zwingend aktiv
-OptSettings.sichtlage_material    = {'t7', 'f'}; % Erlaubte Sichtlagengewebe
-OptSettings.sichtlage_angle       = 45;          % Sichtlagenwinkel in Grad
-OptSettings.core_interface_fabric = true;        % Gewebelage zur Kernanbindung
+OptSettings = struct();
+OptSettings.min_plies              = 4;           % Mindestanzahl Lagen je Deckhaut
+OptSettings.max_plies              = 8;           % Maximalanzahl Lagen je Deckhaut
+OptSettings.angle_mode             = 'simple';    % 'simple' ([0, +/-21, 45]) oder 'advanced'
+OptSettings.material_pool          = 'all';       % 'all' oder 'standard'
+OptSettings.core_thicknesses       = [10, 20];    % Erlaubte Kerndicken [mm] (z.B. [10, 20] oder [10, 18, 20])
+OptSettings.core_materials         = {'core'};    % Erlaubte Kernmaterialien (z.B. {'core'}, {'core', 'rohacell'})
+OptSettings.unique_recipes         = true;        % Nur einzigartige Materialrezepte in Top-5 anzeigen
+OptSettings.sichtlage_active       = true;        % FSG-Sichtlage zwingend aktiv (T 3.5.7)
+OptSettings.sichtlage_material     = {'t7'};      % Erlaubte Sichtlagengewebe
+OptSettings.sichtlage_angle        = 45;          % Sichtlagenwinkel in Grad
+OptSettings.core_interface_fabric  = true;        % Gewebelage zur Kernanbindung
+OptSettings.plot_curve             = true;        % Vergleichsplot erzeugen
 ```
 
 * **Lagenbegrenzung (`min_plies` / `max_plies`)**: Definiert den Suchbereich für die Einzellagen pro Deckhaut (Standard: 4 bis 8 Lagen).
-* **Winkelmodus (`angle_mode`)**: `'simple'` nutzt die bewährten Standardwinkel ($0^\circ, \pm 21^\circ$); `'advanced'` erweitert den Suchraum um $\pm 30^\circ, \pm 45^\circ, \pm 60^\circ$.
-* **Sichtlage (`sichtlage_active`)**: Garantiert die Einhaltung der FSG-Regel T 3.5.7 (äußerste Lage muss zwingend einlagiges Gewebe sein, Standard: $+45^\circ$ `t7` oder `f`).
-* **Kernanbindung (`core_interface_fabric`)**: Erzwingt eine Gewebelage direkt am Wabenkern, um Delaminationsrisiken vorzubeugen.
+* **Winkelmodus (`angle_mode`)**: `'simple'` nutzt die bewährten Standardwinkel ($0^\circ, \pm 21^\circ, 45^\circ$); `'advanced'` erweitert den Suchraum um $\pm 30^\circ, \pm 60^\circ$.
+* **Multi-Kerndicken (`core_thicknesses`)**: Vektor erlaubter Kernstärken in $\text{mm}$ (z. B. `[10, 20]` oder `[10, 18, 20]`). Der Algorithmus berechnet simultan für jede Dicke die Tragfähigkeit, den Kernschub nach Timoshenko und das Bauteilgewicht. So lässt sich direkt prüfen, ob ein dickerer Kern mit dünnerer Deckhaut leichter baut als ein flacher Kern mit mehr Lagen.
+* **Multi-Kernmaterialien (`core_materials`)**: Cell-Array zugelassener Kernwerkstoffe aus `materials.csv` (z. B. `{'core'}` für Aluwaben, `{'core', 'rohacell'}` für Hartschaumvergleiche oder `'all'`).
+* **Rezept-Filterung (`unique_recipes`)**: Bei `true` werden reine Winkel-Permutationen identischer Lagenpakete zusammengefasst. Jede Material- und Kernzusammensetzung erscheint nur einmal mit der biegesteifigkeits-optimalen Schichtreihenfolge ($0^\circ$-Lagen möglichst außen). Bei `false` werden alle mathematischen Varianten gelistet.
+* **Sichtlage (`sichtlage_active`)**: Garantiert die Einhaltung der FSG-Regel T 3.5.7 (äußerste Lage muss zwingend einlagiges Gewebe sein, Standard: $+45^\circ$ `t7`).
+* **Kernanbindung (`core_interface_fabric`)**: Erzwingt eine Gewebelage direkt am Kern zur Delaminationsprophylaxe.
 
 #### Auswertung der Optimierungsergebnisse
-Nach Ausführung von `Optimize_Panel.m` werden vier Ergebnisformate bereitgestellt:
-1. **Vorher/Nachher-Vergleich im Terminal**: Direkte Gegenüberstellung der Baseline (aus `Scenariodata.m`) gegen das Optimum mit genauer Massenersparnis in Gramm und Prozent.
-2. **TOP-5 Rangliste**: Auflistung der 5 leichtesten regelkonformen Laminate inklusive Halbschalen-Layup-String zur direkten Übernahme.
+Nach Ausführung von `Optimize_Panel.m` werden folgende Ergebnisformate bereitgestellt:
+1. **Vorher/Nachher-Vergleich im Terminal**: Direkte Gegenüberstellung der Baseline (aus `Scenariodata.m`) gegen das Optimum mit Kernspezifikation, Deckhautdicken und genauer Massenersparnis in Gramm und Prozent.
+2. **TOP-5 Rangliste**: Auflistung der 5 leichtesten regelkonformen Laminate mit separater Spalte für den Kern (`[Dicke/Typ]`, z. B. `18mm core` oder `10mm rohacell`) und Halbschalen-Layup-String zur direkten Übernahme.
 3. **Kraft-Weg-Vergleichsplot**: Visuelle Gegenüberstellung der Arbeitskurven von Baseline (Rot) und Optimum (Grün) mit Markierung von $F_{max}$ und der geforderten Gradienten-Grenzlinie.
-4. **PDF-Optimierungsbericht**: Automatischer Export der gesamten Zusammenfassung als PDF in den **`Downloads`**-Ordner.
+4. **PDF-Optimierungsbericht**: Automatischer Export der gesamten Zusammenfassung als DIN-A4-PDF in den Projektordner **`06_Reports/`**:
+   ```text
+   06_Reports/SES_Report_Opt_<Gradient>Grad_<Zeitstempel>.pdf
+   ```
 
 ---
 
@@ -364,13 +377,9 @@ Der Parser (`parse_layup.m`) zerlegt den Lagenaufbau-String entlang der Trennzei
 
 Die Materialwerte werden zentral über die Datei `02_Data/materials.csv` verwaltet. Beim Bearbeiten oder Hinzufügen von Datensätzen sind folgende Punkte zu beachten:
 
-* **Werteänderung in CSV wird in MATLAB nicht übernommen**:
-  Die Funktion `load_materials.m` nutzt aus Performancegründen einen internen RAM-Cache (Singleton-Muster). Wird die CSV-Datei extern in Excel oder einem Editor geändert, greift MATLAB weiterhin auf die im Speicher liegenden Altwerte zu.  
-  *Lösung*: Vor einem erneuten Rechenlauf den Speicher über das Command Window leeren:
-  ```matlab
-  clear functions; % Leert den persistenten Material-Cache
-  ```
-  Alternativ kann das Neuladen mit `load_materials([], true)` erzwungen werden.
+* **Automatischer Datei-Reload (Zeitstempel-Erkennung)**:
+  Die Ladefunktion `load_materials.m` überwacht den Dateizeitstempel von `materials.csv`. Sobald die Datei in Excel oder einem Texteditor gespeichert wird, registriert MATLAB dies automatisch und lädt die aktualisierten Kennwerte beim nächsten Rechenlauf ein. Ein manuelles `clear functions` ist im Normalfall nicht mehr erforderlich.  
+  *(Notfall-Lösung: Sollte das Dateisystem den Zeitstempel in Ausnahmefällen nicht aktualisieren, kann das Neuladen mit `load_materials([], true)` erzwungen werden).*
 * **Falsches CSV-Trennzeichen**:
   Die Datei `materials.csv` muss zwingend mit Semikolon (`;`) als Spaltentrennzeichen gespeichert werden. Werden Kommata oder Tabulatoren verwendet, schlägt das Einlesen fehl (`detectImportOptions`).
 * **Fehlende Festigkeitskennwerte in CSV**:
@@ -400,8 +409,11 @@ Beim Ausführen des Skripts `00_Scripts/Optimize_Panel.m` können folgende Konst
 * **Meldung: `KEINE zulässige Lösung gefunden, die alle Targets erfüllt!`**:
   * *Sicherheitsfaktor zu hoch*: Bei aktivem Sicherheitsfaktor (z. B. `safety_factor = 1.25`) steigen die Anforderungen um $25\,\%$.
   * *Lagenfenster zu eng*: Wenn `max_plies = 6` gewählt ist, der geforderte Gradient aber mindestens 8 Lagen verlangt, existiert im gewählten Suchraum keine physikalisch machbare Lösung. `max_plies` schrittweise anheben.
+  * *Kerndicken-Einschränkung*: Wurde in `OptSettings.core_thicknesses` nur eine geringe Dicke (z. B. nur `10`) freigegeben, kann die geforderte Biegesteifigkeit unter Umständen nicht erreicht werden. Den Suchraum auf `[10, 18, 20]` erweitern.
   * *Widersprüchliche Randbedingungen*: Ein hoher Gradient in Kombination mit einer extrem strengen Dickenbegrenzung (`t_skin_max`) schließt alle tragfähigen Laminate aus.
-* **Lange Rechenzeit bei der Optimierung**:
+* **Top-5 Liste enthält ähnliche Aufbauten**:  
+  Steht `OptSettings.unique_recipes` auf `false`, zeigt die Rangliste alle Permutationen desselben Lagenpakets. Setze `OptSettings.unique_recipes = true;`, um nur strukturell und rezeptuell einzigartige Lösungen (verschiedene Materialien und Kerne) mit optimaler Außenlagen-Anordnung zu vergleichen.
+* **Lange Rechenzeit bei der Optimierung**:  
   Steht `angle_mode` auf `'advanced'`, untersucht der Algorithmus sämtliche Winkelkombinationen aus $[21^\circ, 30^\circ, 45^\circ, 60^\circ]$. Dadurch wächst die Anzahl der Kandidaten exponentiell an. Für schnelle Iterationen immer `'simple'` nutzen.
 
 ---
@@ -411,9 +423,10 @@ Beim Ausführen des Skripts `00_Scripts/Optimize_Panel.m` können folgende Konst
 * **`Unrecognized function or variable`**:
   MATLAB findet die Funktionen nicht.  
   *Lösung*: Vor Arbeitsbeginn immer die Projektdatei `SES_Panelberechnung.prj` im Hauptverzeichnis doppelklicken. Dadurch werden alle Unterordner (`00_Scripts`, `01_Functions`, `02_Data`) automatisch dem MATLAB-Suchpfad hinzugefügt.
-* **PDF-Export schlägt fehl oder Datei wird nicht aktualisiert**:
-  Die Funktion `export_pdf_report.m` speichert Berichte standardmäßig im Ordner `Downloads`. Ist ein bereits erzeugter PDF-Bericht in einem externen PDF-Viewer (z. B. Adobe Acrobat) geöffnet, sperrt Windows die Datei gegen Überschreiben.  
-  *Lösung*: PDF-Viewer schließen oder das Dokument im Viewer freigeben.
+* **PDF-Export und Speicherort**:  
+  Die Funktion `export_pdf_report.m` speichert alle generierten Berichte deterministisch im Projektunterordner **`06_Reports/`**. Existiert der Ordner noch nicht, legt ihn MATLAB automatisch an.  
+  *Meldung bei Schreibschutz*: Ist ein bereits erzeugter PDF-Bericht in einem externen PDF-Viewer (z. B. Adobe Acrobat) geöffnet, sperrt Windows die Datei gegen Überschreiben.  
+  *Lösung*: Das Dokument im externen PDF-Viewer schließen oder einen neuen Rechenlauf mit aktuellem Zeitstempel starten.
 
 ---
 
@@ -448,9 +461,9 @@ Zusätzlich dient der Dickenabgleich der Fertigungskontrolle: Bei symmetrischen 
 
 Dank der physikalischen Reihenschaltung von Plattenbiegung, Wabenkern-Schubverzerrung nach [ASTM](#abk-astm) C393 und der realen Prüfstands-Compliance ($K_{\text{rig}} = 22\,218\text{ N/mm}$ aus dem offiziellen SES Baseline Steel Tube Test T3.2) liegt die mittlere absolute Abweichung (MAE) über alle 28 Panels bei ca. $12{,}7\,\%$ für den Gradienten und unter $10\,\%$ bei den aktuellen 2026er Monocoque-Panels.
 
-Nach jedem Gesamtlauf erzeugt das Skript automatisch einen druckfertigen DIN-A4-Prüfbericht im [PDF](#abk-pdf)-Format im Ordner **`Downloads`**:
+Nach jedem Gesamtlauf erzeugt das Skript automatisch einen druckfertigen DIN-A4-Prüfbericht im [PDF](#abk-pdf)-Format im Projektordner **`06_Reports/`**:
 ```text
-Downloads/SES_Report_Benchmark_Validation_<Zeitstempel>.pdf
+06_Reports/SES_Report_Benchmark_Validation_<Zeitstempel>.pdf
 ```
 
 ---
@@ -573,6 +586,50 @@ Bei der Auslegung und manuellen Definition von Laminaten müssen folgende Regelw
   Erreicht die dünnere Deckhaut mindestens $1{,}0\text{ mm}$ Dicke, ist jedes Dickenverhältnis regelkonform. Beim physischen 3-Punkt-Biegeversuch für den [SES](#abk-ses)-Nachweis muss bei asymmetrischen Aufbauten die schwächere Deckhaut auf Zug (Unterseite) getestet werden.
 * **Kernanbindung & Klebefilm**: Der Klebefilm (`cp`) muss beidseitig zwischen Kern und Deckhaut verbaut sein. Für den standardmäßigen [SES](#abk-ses)-Nachweis wird ein symmetrischer Aufbau (`sym`) empfohlen, um Schäl- und Kopplungseffekte zu minimieren.
 
+---
 
+### 6.3 Anleitung: Neues Material oder neuen Kern hinzufügen (Plug & Play)
 
+Das Berechnungstool ist vollständig Plug-&-Play-fähig: Neue Faserhalbzeuge ([CFK](#abk-cfk)-[UD](#abk-ud), Gewebe, GFK, Aramid) sowie neuartige Kernmaterialien (Rohacell, Nomex, PVC-Schaum etc.) können ohne Eingriff in den MATLAB-Quellcode direkt über die zentrale Datenbank `02_Data/materials.csv` angelegt und sofort im Lagenaufbau verwendet werden.
 
+#### Schritt 1: Datei `materials.csv` in Excel öffnen
+Öffne die Datei `02_Data/materials.csv` direkt in Microsoft Excel oder einem Texteditor. Die Datei ist durch Semikolon (`;`) getrennt aufgebaut.
+
+#### Schritt 2: Neue Zeile für Werkstoff oder Kern anlegen
+Trage am Ende der Tabelle eine neue Zeile ein. Je nach Typ (Deckhautlage oder Kern) sind folgende Spalten auszufüllen:
+
+1. **Für ein neues Deckhaut-Material (z. B. CFK, GFK, Aramid, Hybrid):**
+   * `Name`: Vollständige Bezeichnung (z. B. `IM7 UD` oder `Glasgewebe 280g`).
+   * `E1`, `E2`, `G12`: Elastizitäts- und Schubmoduln in $\text{MPa}$ (z. B. $E_1 = 165\,000\text{ MPa}$ für UD oder $E_1 \approx E_2 = 25\,000\text{ MPa}$ für Glasgewebe).
+   * `N12`: Querkontraktionszahl $\nu_{12}$ [-] (typisch $0{,}25$ bis $0{,}30$ bei Faserverbunden).
+   * `Xt`, `Xc`, `Yt`, `Yc`, `S12`: Zug-, Druck- und Schubfestigkeiten in $\text{MPa}$ für die Hashin-Versagensanalyse.
+   * `Kurzname`: Ein eindeutiger, leicht zu merkender Token (z. B. `im7`, `glas`, `t10`). *(Wichtig: Keine Zahlen als Präfix wählen, da führende Zahlen im Layup als Faserwinkel interpretiert werden!)*
+   * `Dicke`: Nominale Einzellagendicke $t_{\text{ply}}$ in $\text{mm}$ (z. B. $0{,}20$).
+   * `Dichte`: Dichte $\rho$ in $\text{t/mm}^3$ ($\text{g/cm}^3 \times 10^{-9}$, z. B. `1.52E-9` für $1{,}52\text{ g/cm}^3$).
+
+2. **Für ein neues Kernmaterial (z. B. Rohacell, Nomex, PVC-Schaum, Aluwabe):**
+   * `Name`: Kernbezeichnung (z. B. `Rohacell 51 IG` oder `Nomex 48`).
+   * `G13`, `G23`: Schubmodul des Kerns in $\text{MPa}$ (bei isotropem Schaum $G_{13} = G_{23} \approx 19\text{ MPa}$; bei Wabenkernen Längs- und Querschubmodul).
+   * `S12`: Zulässige Kernschubfestigkeit $\tau_{\text{core,max}}$ in $\text{MPa}$ (z. B. $0{,}8\text{ MPa}$ für Rohacell oder $2{,}4\text{ MPa}$ für Wabe).
+   * `Kurzname`: Eindeutiges Kürzel (z. B. `rohacell`, `nomex`, `foam`).
+   * `Dichte`: Kerndichte in $\text{t/mm}^3$ (z. B. `5.1E-11` für $51\text{ kg/m}^3$).
+
+#### Schritt 3: Speichern & automatischer Reload
+Speichere die Datei in Excel ab. Dank der integrierten Dateizeitstempel-Erkennung in `load_materials.m` registriert MATLAB die Änderung auf Dateiebene sofort: Beim nächsten Klick auf `Calculate_Single_Panel.m` oder `Benchmark_Panels.m` wird die Materialdatenbank ohne manuelle Befehle oder Neustarts im Hintergrund aktualisiert.
+
+#### Schritt 4: Verwendung im Lagenaufbau (`Scenario.layup`)
+Das neue Material bzw. der neue Kern steht sofort in der Layup-Syntax zur Verfügung:
+* **Faserlage**: `[Winkel][Kurzname]`, z. B. `0im7`, `45glas`, `-21t10`.
+* **Kern**: `[Dicke][Kurzname]`, z. B. `15rohacell`, `20nomex`, `18core` (oder `18corew` für Kernschub in Querrichtung).
+
+```matlab
+% Beispiel in 01_Functions/Scenariodata.m:
+Scenario.layup = '45glas/0im7/cp/15rohacell/sym';
+% Ergibt nach Auflösung der Symmetrie:
+% 45glas / 0im7 / cp / 15rohacell / cp / 0im7 / 45glas
+```
+
+> [!TIP]
+> **Automatisierte Parser-Intelligenz:**  
+> * **Gewebeerkennung bei Symmetrie**: Enthält der Name das Wort „Fabric“ oder „Gewebe“ bzw. gilt $E_1 \approx E_2$, stuft der Parser die Lage automatisch als Gewebe ein. $45^\circ$-Gewebe behalten bei der Spiegelsymmetrie (`sym`) ihren Winkel $+45^\circ$, während [UD](#abk-ud)-Lagen winkelgespiegelt werden ($+21^\circ \to -21^\circ$).  
+> * **Dynamische Panelmasse & Schubsteifigkeit**: Das Panelgewicht und die Timoshenko-Kernschubverzerrung nach [ASTM](#abk-astm) C393 werden auf Basis der realen Dichte und des Schubmoduls des definierten Kerns berechnet.

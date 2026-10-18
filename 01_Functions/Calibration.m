@@ -18,6 +18,6 @@ Calib.use_lpf             = false;    % Progressives Last-Ply-Failure (false = H
 % Elastoplastizität & Energie
 Calib.softening_factor    = 0.95;     % Sekanten-Softeningfaktor (aus ASTM C393 Prüfkurven: w_lin / w_max ~ 0.90..0.98)
 Calib.indentation_depth   = 0.15;     % Lokale Rolleneindrückung [mm]
-Calib.energy_mode         = 'to_peak';% 'to_peak' = Prüfstandsabgleich bis F_max | 'ses_total' = FS-Reglementnachweis bis 12.7 mm (inkl. Wabenstauchung)
+Calib.energy_mode         = 'ses_total';% 'to_peak' = Prüfstandsabgleich bis F_max | 'ses_total' = FS-Reglementnachweis bis 12.7 mm (inkl. Wabenstauchung)
 
 end

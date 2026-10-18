@@ -6,6 +6,7 @@ function Weight = calc_panel_weight(layup_or_scenario, core_t_in, panel_b_in, pa
 %   Weight = calc_panel_weight(layup_str, [core_t], [panel_b], [panel_l])
 
 % 1. Eingaben normalisieren
+panel_span = 400;
 if isstruct(layup_or_scenario)
     Scenario = layup_or_scenario;
     layup_str = Scenario.layup;
@@ -16,16 +17,27 @@ if isstruct(layup_or_scenario)
     end
     if isfield(Scenario, 'panel') && isfield(Scenario.panel, 'b')
         panel_b = Scenario.panel.b;
-        panel_l = Scenario.panel.l;
+        if isfield(Scenario.panel, 'span') && ~isempty(Scenario.panel.span)
+            panel_span = Scenario.panel.span;
+        elseif isfield(Scenario.panel, 'l')
+            panel_span = Scenario.panel.l;
+        end
+        if isfield(Scenario.panel, 'l_real') && ~isempty(Scenario.panel.l_real)
+            panel_l = Scenario.panel.l_real;
+        elseif isfield(Scenario.panel, 'l') && Scenario.panel.l > 400
+            panel_l = Scenario.panel.l;
+        else
+            panel_l = 500; % Reale Mindest-Panellänge nach SES-Reglement (500 x 275 mm)
+        end
     else
         panel_b = 275;
-        panel_l = 400;
+        panel_l = 500;
     end
 else
     layup_str = layup_or_scenario;
     if nargin >= 2 && ~isempty(core_t_in), core_t_default = core_t_in; else, core_t_default = 18; end
     if nargin >= 3 && ~isempty(panel_b_in), panel_b = panel_b_in; else, panel_b = 275; end
-    if nargin >= 4 && ~isempty(panel_l_in), panel_l = panel_l_in; else, panel_l = 400; end
+    if nargin >= 4 && ~isempty(panel_l_in), panel_l = panel_l_in; else, panel_l = 500; end
 end
 
 % 2. Materialdatenbank via Singleton laden
@@ -40,7 +52,7 @@ end
 mat_dict = load_materials(csv_path);
 
 % 3. Lagenaufbau kanonisch parsen
-[top_parts, lower_parts, detected_core_t, ~, n_cp] = parse_layup(layup_str, core_t_default);
+[top_parts, lower_parts, detected_core_t, ~, n_cp, ~, ~, detected_core_mat] = parse_layup(layup_str, core_t_default);
 
 has_core = ~isnan(detected_core_t) && detected_core_t > 0;
 if has_core
@@ -67,7 +79,9 @@ gsm_skins = gsm_top + gsm_lower;
 
 % Kern-Flächengewicht
 core_rho = 7.5e-11; % t/mm^3
-if isfield(mat_dict, 'core')
+if ~isempty(detected_core_mat) && isfield(mat_dict, detected_core_mat)
+    core_rho = mat_dict.(detected_core_mat).rho;
+elseif isfield(mat_dict, 'core')
     core_rho = mat_dict.core.rho;
 end
 
@@ -116,6 +130,7 @@ Weight.mass_panel  = mass_panel;
 Weight.area_m2     = area_m2;
 Weight.panel_b     = panel_b;
 Weight.panel_l     = panel_l;
+Weight.span        = panel_span;
 Weight.core_t      = core_t;
 Weight.n_cp        = n_cp;
 
