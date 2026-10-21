@@ -76,10 +76,13 @@ end
 % Sandwich-Laminat mit Kern
 core_token = lower(parts{idx_core});
 [core_num, core_mat_raw] = parse_ply_token(core_token);
-if core_num > 0
+% Kerndicke wird primaer und verbindlich aus dem Skript/Szenario uebernommen
+if ~isempty(default_core_t) && ~isnan(default_core_t) && default_core_t > 0
+    core_t = default_core_t;
+elseif core_num > 0
     core_t = core_num;
 else
-    core_t = default_core_t;
+    core_t = 18;
 end
 
 if strcmpi(core_mat_raw, 'corew')

@@ -50,7 +50,11 @@ function [Results, Curve] = Deflection(Results, Scenario, Mdata)
 
     % C. Deckhaut-Knicken / Wrinkling (Hoff-Mautner Kriterium)
     if isfield(Mdata.core, 'G') && Mdata.core.G > 0
-        sigma_wrinkling = 0.5 * (Mdata.cfk.E_top * 92.0 * Mdata.core.G)^(1/3);
+        E3_core = 92.0;
+        if isfield(Mdata.core, 'E3') && ~isempty(Mdata.core.E3) && Mdata.core.E3 > 0
+            E3_core = Mdata.core.E3;
+        end
+        sigma_wrinkling = 0.5 * (Mdata.cfk.E_top * E3_core * Mdata.core.G)^(1/3);
         F_wrinkling = (4 * Results.I * sigma_wrinkling) / (span * y_max);
     else
         F_wrinkling = inf;

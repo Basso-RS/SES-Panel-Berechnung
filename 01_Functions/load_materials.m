@@ -43,14 +43,34 @@ mat_table = readtable(materials_csv_path, opts);
 
 cached_dict = struct();
 for r = 1:height(mat_table)
-    kname = lower(strtrim(char(mat_table.Kurzname(r))));
+    if ismissing(mat_table.Kurzname(r)) || ismissing(mat_table.Name(r))
+        continue;
+    end
+    raw_kname = char(mat_table.Kurzname(r));
+    kname = lower(strtrim(raw_kname));
+    if isempty(kname) || strcmp(kname, ';') || strcmp(kname, 's')
+        continue;
+    end
+    
+    mat_name = char(mat_table.Name(r));
+    if isempty(strtrim(mat_name)) || strcmp(mat_name, ';')
+        continue;
+    end
+    
     E1   = mat_table.E1(r);
     E2   = mat_table.E2(r);
     G12  = mat_table.G12(r);
     nu12 = mat_table.N12(r);
     
+    is_core_raw = contains(lower(mat_name), {'core', 'wabe', 'foam', 'schaum', 'rohacell', 'nomex', 'honeycomb'}) || ...
+                  strcmpi(kname, 'core') || (E1 < 1000 && mat_table.Dichte(r) < 5e-10);
+              
     t_ply = mat_table.Dicke(r);
-    if isnan(t_ply) || t_ply <= 0, t_ply = 0.2; end
+    if is_core_raw
+        t_ply = NaN; % Kerndicke wird niemals aus der Excel bestimmt, sondern ausschliesslich aus dem Skript!
+    elseif isnan(t_ply) || t_ply <= 0
+        t_ply = 0.2;
+    end
     
     rho = mat_table.Dichte(r);
     if isnan(rho) || rho <= 0, rho = 1.5e-9; end
@@ -86,6 +106,15 @@ for r = 1:height(mat_table)
     entry.Yt = Yt;
     entry.Yc = Yc;
     entry.S  = S;
+    
+    S23 = S;
+    if ismember('S23', mat_table.Properties.VariableNames)
+        raw_s23 = mat_table.S23(r);
+        if ~isnan(raw_s23) && raw_s23 > 0
+            S23 = raw_s23;
+        end
+    end
+    entry.S23 = S23;
     
     entry.G13 = mat_table.G13(r);
     entry.G23 = mat_table.G23(r);

@@ -54,14 +54,14 @@ mat_dict = load_materials(csv_path);
 % 3. Lagenaufbau kanonisch parsen
 [top_parts, lower_parts, detected_core_t, ~, n_cp, ~, ~, detected_core_mat] = parse_layup(layup_str, core_t_default);
 
-has_core = ~isnan(detected_core_t) && detected_core_t > 0;
+has_core = ~isempty(detected_core_mat) || (~isnan(detected_core_t) && detected_core_t > 0);
 if has_core
-    core_t = detected_core_t;
+    core_t = core_t_default;
     if n_cp == 0
         n_cp = 2;
     end
 else
-    core_t = core_t_default;
+    core_t = 0;
 end
 
 % 4. Flächengewichte der Einzelschichten berechnen
@@ -78,9 +78,16 @@ end
 gsm_skins = gsm_top + gsm_lower;
 
 % Kern-Flächengewicht
+core_mat_used = 'core';
+if isstruct(layup_or_scenario) && isfield(layup_or_scenario, 'core_mat') && ~isempty(layup_or_scenario.core_mat)
+    core_mat_used = layup_or_scenario.core_mat;
+elseif ~isempty(detected_core_mat)
+    core_mat_used = detected_core_mat;
+end
+
 core_rho = 7.5e-11; % t/mm^3
-if ~isempty(detected_core_mat) && isfield(mat_dict, detected_core_mat)
-    core_rho = mat_dict.(detected_core_mat).rho;
+if isfield(mat_dict, core_mat_used) && isfield(mat_dict.(core_mat_used), 'rho')
+    core_rho = mat_dict.(core_mat_used).rho;
 elseif isfield(mat_dict, 'core')
     core_rho = mat_dict.core.rho;
 end
